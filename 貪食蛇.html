@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貪食蛇遊戲 (AI戰略版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            touch-action: none; /* 防止在移動設備上滑動時滾動頁面 */
+        }
+        canvas {
+            background-color: #1e293b; /* 深色背景 */
+        }
+        .control-button {
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+        }
+        .control-button:active {
+            transform: scale(0.95);
+        }
+        .ai-button.active {
+            background-color: #14b8a6;
+            color: white;
+            box-shadow: 0 0 10px #14b8a6;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 flex flex-col items-center justify-center min-h-screen p-4 text-slate-200">
+
+    <div class="w-full max-w-lg mx-auto bg-slate-800 rounded-xl shadow-2xl p-6 relative overflow-hidden border border-slate-700">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-100">貪食蛇</h1>
+                 <button id="aiButton" class="ai-button mt-2 bg-slate-600 hover:bg-slate-500 text-slate-300 font-bold py-1 px-3 rounded-full text-sm transition-all duration-300">
+                    🤖 AI 模式
+                </button>
+            </div>
+            <div class="text-right">
+                <div class="text-lg font-semibold bg-slate-700 text-slate-200 px-4 py-1 rounded-lg mb-1">
+                    分數: <span id="score">0</span>
+                </div>
+                 <div class="text-sm font-semibold bg-slate-600 text-slate-300 px-4 py-1 rounded-lg">
+                    最高分: <span id="highScore">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 遊戲畫布 -->
+        <canvas id="gameCanvas" class="border-2 border-slate-600 rounded-lg w-full aspect-square"></canvas>
+
+        <!-- 遊戲結束畫面 -->
+        <div id="gameOverScreen" class="absolute inset-0 bg-slate-900 bg-opacity-80 flex-col items-center justify-center text-white text-center p-8 rounded-xl hidden">
+            <h2 class="text-4xl font-bold mb-4">遊戲結束</h2>
+            <p class="text-xl mb-6">你的分數: <span id="finalScore">0</span></p>
+            <button id="restartButton" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                重新開始
+            </button>
+        </div>
+    </div>
+
+    <!-- 手機控制按鈕 -->
+    <div class="mt-6 grid grid-cols-3 gap-3 w-full max-w-xs md:hidden">
+        <div></div> <button id="upBtn" class="control-button bg-slate-700 p-4 rounded-lg shadow-md">▲</button> <div></div>
+        <button id="leftBtn" class="control-button bg-slate-700 p-4 rounded-lg shadow-md">◀</button>
+        <button id="downBtn" class="control-button bg-slate-700 p-4 rounded-lg shadow-md">▼</button>
+        <button id="rightBtn" class="control-button bg-slate-700 p-4 rounded-lg shadow-md">▶</button>
+    </div>
+    
+    <div class="mt-4 text-slate-400 text-sm text-center md:block hidden">
+        方向鍵控制，'P' 暫停，'A' 切換 AI 模式
+    </div>
+	<a href="./index.html" class="fixed bottom-5 right-5 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors z-10">
+        返回
+    </a>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const highScoreElement = document.getElementById('highScore');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreElement = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+        const aiButton = document.getElementById('aiButton');
+        
+        // Game Settings
+        const gridSize = 35; 
+        let tileCount;
+        
+        // Game State
+        let snake, food, dx, dy, score, highScore, changingDirection, gameActive, isPaused, isAiActive;
+        
+        // Animation Loop
+        let lastRenderTime = 0;
+        let gameSpeed;
+
+        // --- A* Pathfinding Algorithm ---
+        function findPath(start, end, currentSnake) {
+            class Node {
+                constructor(x, y, parent = null) {
+                    this.x = x; this.y = y; this.parent = parent;
+                    this.gCost = 0; this.hCost = 0; this.fCost = 0;
+                }
+            }
+
+            const openList = [new Node(start.x, start.y)];
+            const closedList = new Set();
+
+            while (openList.length > 0) {
+                let currentNode = openList.sort((a, b) => a.fCost - b.fCost || a.hCost - b.hCost)[0];
+                openList.shift();
+                closedList.add(`${currentNode.x},${currentNode.y}`);
+
+                if (currentNode.x === end.x && currentNode.y === end.y) {
+                    const path = [];
+                    let current = currentNode;
+                    while (current) { path.push({x: current.x, y: current.y}); current = current.parent; }
+                    return path.reverse();
+                }
+
+                const directions = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}];
+                for (const dir of directions) {
+                    const neighborX = currentNode.x + dir.x;
+                    const neighborY = currentNode.y + dir.y;
+
+                    if (neighborX < 0 || neighborX >= tileCount || neighborY < 0 || neighborY >= tileCount || closedList.has(`${neighborX},${neighborY}`)) continue;
+                    
+                    let isObstacle = false;
+                    // 使用傳入的蛇身狀態來判斷障礙物
+                    for (let i = 0; i < currentSnake.length - 1; i++) {
+                        if (currentSnake[i].x === neighborX && currentSnake[i].y === neighborY) { isObstacle = true; break; }
+                    }
+                    if (isObstacle) continue;
+
+                    const neighborNode = new Node(neighborX, neighborY, currentNode);
+                    neighborNode.gCost = currentNode.gCost + 1;
+                    neighborNode.hCost = Math.abs(neighborNode.x - end.x) + Math.abs(neighborNode.y - end.y);
+                    neighborNode.fCost = neighborNode.gCost + neighborNode.hCost;
+
+                    if (!openList.some(node => node.x === neighborX && node.y === neighborY && neighborNode.gCost >= node.gCost)) {
+                        openList.push(neighborNode);
+                    }
+                }
+            }
+            return null; // No path found
+        }
+        
+        // --- Game Logic ---
+        function init() {
+            dx = 0; dy = 0; score = 0;
+            food = {};
+            changingDirection = false; gameActive = true; isPaused = false; isAiActive = false;
+            gameSpeed = 5;
+
+            scoreElement.textContent = score;
+            highScore = localStorage.getItem('snakeHighScore') || 0;
+            highScoreElement.textContent = highScore;
+            aiButton.classList.remove('active');
+            
+            gameOverScreen.classList.add('hidden');
+            gameOverScreen.classList.remove('flex');
+
+            setupCanvas();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '20px "Noto Sans TC"';
+            ctx.textAlign = 'center';
+            ctx.fillText('按任意方向鍵開始', canvas.width / 2, canvas.height / 2);
+        }
+
+        function setupCanvas() {
+            const canvasSize = Math.min(canvas.parentElement.clientWidth - 2, 600); 
+            canvas.width = canvasSize - (canvasSize % gridSize); 
+            canvas.height = canvasSize - (canvasSize % gridSize);
+            tileCount = canvas.width / gridSize;
+            snake = [{ x: Math.floor(tileCount / 2), y: Math.floor(tileCount / 2) }];
+            generateFood();
+        }
+
+        function gameLoop(currentTime) {
+            if (!gameActive) return;
+            window.requestAnimationFrame(gameLoop);
+            if (isPaused) { drawPauseScreen(); return; }
+
+            const secondsSinceLastRender = (currentTime - lastRenderTime) / 1000;
+            if (secondsSinceLastRender < 1 / gameSpeed) return;
+            lastRenderTime = currentTime;
+            
+            if (isAiActive) updateAiDirection();
+            
+            changingDirection = false;
+            clearCanvas();
+            drawGrid();
+            drawFood();
+            moveSnake();
+            drawSnake();
+            
+            if (checkGameOver()) endGame();
+        }
+
+        function updateAiDirection() {
+            // --- 1. 預判性安全檢查 (Lookahead Safety Check) ---
+            let pathToFood = findPath(snake[0], food, snake);
+            let isSafePathFound = false;
+
+            if (pathToFood) {
+                // 模擬吃下蘋果後的未來狀態
+                const futureSnake = [...snake]; // 複製當前蛇身
+                futureSnake.unshift({x: food.x, y: food.y}); // 模擬吃下蘋果，蛇頭移動到蘋果位置
+                // 注意：這裡我們不 pop 尾巴，因為吃下蘋果後身體會變長
+
+                // 檢查在未來狀態下，是否還能找到一條從新蛇頭到新蛇尾的路
+                const futureTail = futureSnake[futureSnake.length - 1];
+                const pathToFutureTail = findPath(futureSnake[0], futureTail, futureSnake);
+
+                if (pathToFutureTail) {
+                    isSafePathFound = true;
+                }
+            }
+
+            let finalPath = null;
+            if (isSafePathFound) {
+                finalPath = pathToFood;
+            } else {
+                // --- 2. 空間最大化生存策略 (Space-Maximizing Survival) ---
+                const possibleMoves = [
+                    {dx: 0, dy: -1}, {dx: 0, dy: 1}, 
+                    {dx: -1, dy: 0}, {dx: 1, dy: 0}
+                ];
+                let bestMove = null;
+                let maxSpace = -1;
+
+                for (const move of possibleMoves) {
+                    const nextHead = {x: snake[0].x + move.dx, y: snake[0].y + move.dy};
+                    
+                    // 排除會立即死亡的移動
+                    if (nextHead.x < 0 || nextHead.x >= tileCount || nextHead.y < 0 || nextHead.y >= tileCount) continue;
+                    let willCollide = false;
+                    for (const part of snake) {
+                        if (part.x === nextHead.x && part.y === nextHead.y) { willCollide = true; break; }
+                    }
+                    if (willCollide) continue;
+
+                    // 使用 BFS 計算從該點出發可觸及的空間大小
+                    const space = countReachableSpace(nextHead, snake);
+                    if (space > maxSpace) {
+                        maxSpace = space;
+                        bestMove = move;
+                    }
+                }
+
+                if (bestMove) {
+                    finalPath = [snake[0], {x: snake[0].x + bestMove.dx, y: snake[0].y + bestMove.dy}];
+                } else {
+                     // --- 3. 最後手段：追逐尾巴 ---
+                    const tail = snake[snake.length - 1];
+                    finalPath = findPath(snake[0], tail, snake);
+                }
+            }
+            
+            // --- 執行移動 ---
+            if (finalPath && finalPath.length > 1) {
+                const nextStep = finalPath[1];
+                const newDx = nextStep.x - snake[0].x;
+                const newDy = nextStep.y - snake[0].y;
+                if (newDx !== -dx || newDy !== -dy) { dx = newDx; dy = newDy; }
+            }
+        }
+        
+        function countReachableSpace(startNode, currentSnake) {
+            const queue = [startNode];
+            const visited = new Set([`${startNode.x},${startNode.y}`]);
+            let count = 0;
+            
+            const snakeBodySet = new Set();
+            for(const part of currentSnake) {
+                snakeBodySet.add(`${part.x},${part.y}`);
+            }
+
+            while (queue.length > 0) {
+                const node = queue.shift();
+                count++;
+                const directions = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}];
+                for (const dir of directions) {
+                    const neighborX = node.x + dir.x;
+                    const neighborY = node.y + dir.y;
+                    const neighborKey = `${neighborX},${neighborY}`;
+
+                    if (neighborX >= 0 && neighborX < tileCount && neighborY >= 0 && neighborY < tileCount && !visited.has(neighborKey) && !snakeBodySet.has(neighborKey)) {
+                        visited.add(neighborKey);
+                        queue.push({x: neighborX, y: neighborY});
+                    }
+                }
+            }
+            return count;
+        }
+
+
+        function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+        function drawGrid() {
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+            for (let x = 0; x <= canvas.width; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+            for (let y = 0; y <= canvas.height; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+        }
+
+        function drawSnake() {
+            snake.forEach((part, index) => {
+                ctx.fillStyle = index === 0 ? '#2dd4bf' : '#14b8a6'; 
+                ctx.strokeStyle = '#0f766e'; ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.roundRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize, 8);
+                ctx.fill(); ctx.stroke();
+
+                if (index === 0) {
+                    ctx.fillStyle = '#1e293b';
+                    const eyeSize = gridSize / 7;
+                    let eye1X, eye1Y, eye2X, eye2Y;
+                    if (dx === 1) { eye1X = part.x * gridSize + gridSize * 0.7; eye1Y = part.y * gridSize + gridSize * 0.3; eye2X = eye1X; eye2Y = part.y * gridSize + gridSize * 0.7; } 
+                    else if (dx === -1) { eye1X = part.x * gridSize + gridSize * 0.3; eye1Y = part.y * gridSize + gridSize * 0.3; eye2X = eye1X; eye2Y = part.y * gridSize + gridSize * 0.7; } 
+                    else if (dy === 1) { eye1X = part.x * gridSize + gridSize * 0.3; eye1Y = part.y * gridSize + gridSize * 0.7; eye2X = part.x * gridSize + gridSize * 0.7; eye2Y = eye1Y; } 
+                    else { eye1X = part.x * gridSize + gridSize * 0.3; eye1Y = part.y * gridSize + gridSize * 0.3; eye2X = part.x * gridSize + gridSize * 0.7; eye2Y = eye1Y; }
+                    ctx.beginPath(); ctx.arc(eye1X, eye1Y, eyeSize, 0, 2 * Math.PI); ctx.fill();
+                    ctx.beginPath(); ctx.arc(eye2X, eye2Y, eyeSize, 0, 2 * Math.PI); ctx.fill();
+                }
+            });
+        }
+
+        function drawFood() {
+            ctx.font = `${gridSize * 1.1}px serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            const centerX = food.x * gridSize + gridSize / 2;
+            const centerY = food.y * gridSize + gridSize / 2;
+            ctx.fillText('🍎', centerX, centerY);
+        }
+
+        function moveSnake() {
+            if (dx === 0 && dy === 0) return;
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            snake.unshift(head);
+
+            if (snake[0].x === food.x && snake[0].y === food.y) {
+                score += 10;
+                scoreElement.textContent = score;
+                gameSpeed += 0.25;
+                generateFood();
+            } else {
+                snake.pop();
+            }
+        }
+
+        function generateFood() {
+            let foodOnSnake;
+            do {
+                foodOnSnake = false;
+                food.x = Math.floor(Math.random() * tileCount);
+                food.y = Math.floor(Math.random() * tileCount);
+                for (const part of snake) {
+                    if (part.x === food.x && part.y === food.y) { foodOnSnake = true; break; }
+                }
+            } while (foodOnSnake);
+        }
+
+        function checkGameOver() {
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x === snake[0].x && snake[i].y === snake[0].y) return true;
+            }
+            return snake[0].x < 0 || snake[0].x >= tileCount || snake[0].y < 0 || snake[0].y >= tileCount;
+        }
+
+        function endGame() {
+            gameActive = false;
+            finalScoreElement.textContent = score;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('snakeHighScore', highScore);
+                highScoreElement.textContent = highScore;
+            }
+            gameOverScreen.classList.remove('hidden');
+            gameOverScreen.classList.add('flex');
+        }
+
+        function togglePause() {
+            if (!gameActive || (dx === 0 && dy === 0)) return;
+            isPaused = !isPaused;
+            if (!isPaused) { lastRenderTime = performance.now(); }
+        }
+
+        function toggleAi() {
+            if (!gameActive) return; // 如果遊戲已結束則不執行
+
+            // 如果遊戲尚未開始，點擊 AI 按鈕即可啟動遊戲循環
+            if (dx === 0 && dy === 0) {
+                window.requestAnimationFrame(gameLoop);
+            }
+
+            isAiActive = !isAiActive;
+            aiButton.classList.toggle('active', isAiActive);
+        }
+
+        function drawPauseScreen() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '40px "Noto Sans TC"';
+            ctx.textAlign = 'center';
+            ctx.fillText('已暫停', canvas.width / 2, canvas.height / 2);
+        }
+
+        function handleKeyPress(event) {
+            const keyPressed = event.key.toLowerCase();
+            if (dx === 0 && dy === 0 && gameActive && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(keyPressed)) {
+                window.requestAnimationFrame(gameLoop);
+            }
+
+            if (keyPressed === 'p') { togglePause(); return; }
+            if (keyPressed === 'a') { toggleAi(); return; }
+            if (changingDirection || isPaused || isAiActive) return;
+            
+            changingDirection = true;
+            const goingUp = dy === -1, goingDown = dy === 1, goingRight = dx === 1, goingLeft = dx === -1;
+
+            if ((keyPressed === 'arrowleft' || keyPressed === 'a') && !goingRight) { dx = -1; dy = 0; } 
+            else if ((keyPressed === 'arrowup' || keyPressed === 'w') && !goingDown) { dx = 0; dy = -1; } 
+            else if ((keyPressed === 'arrowright' || keyPressed === 'd') && !goingLeft) { dx = 1; dy = 0; } 
+            else if ((keyPressed === 'arrowdown' || keyPressed === 's') && !goingUp) { dx = 0; dy = 1; }
+        }
+
+        function setupTouchControls() {
+            const startLoopOnClick = () => { if (dx === 0 && dy === 0 && gameActive) window.requestAnimationFrame(gameLoop); };
+            document.getElementById('upBtn').addEventListener('click', () => { startLoopOnClick(); if (dy !== 1 && !isAiActive) { dx = 0; dy = -1; } });
+            document.getElementById('downBtn').addEventListener('click', () => { startLoopOnClick(); if (dy !== -1 && !isAiActive) { dx = 0; dy = 1; } });
+            document.getElementById('leftBtn').addEventListener('click', () => { startLoopOnClick(); if (dx !== 1 && !isAiActive) { dx = -1; dy = 0; } });
+            document.getElementById('rightBtn').addEventListener('click', () => { startLoopOnClick(); if (dx !== -1 && !isAiActive) { dx = 1; dy = 0; } });
+        }
+
+        // Event Listeners
+        document.addEventListener('keydown', handleKeyPress);
+        restartButton.addEventListener('click', init);
+        aiButton.addEventListener('click', toggleAi);
+        window.addEventListener('resize', init);
+
+        // Initialize Game
+        init();
+        setupTouchControls();
+    </script>
+</body>
+</html>
