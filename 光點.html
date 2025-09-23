@@ -51,6 +51,42 @@
             box-shadow: none;
             opacity: 0.5;
         }
+        
+        /* --- NEW: Vertical Slider Styles --- */
+        .slider-vertical {
+            -webkit-appearance: slider-vertical; /* For WebKit browsers */
+            appearance: slider-vertical;
+            writing-mode: bt-lr; /* Bottom to top */
+            width: 8px;
+            height: 150px;
+            background: #374151;
+            border-radius: 5px;
+            outline: none;
+            cursor: ns-resize;
+        }
+
+        .slider-vertical::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #3b82f6;
+            cursor: ns-resize;
+            border-radius: 50%;
+            border: 2px solid #fff;
+             box-shadow: 0 0 10px #3b82f6;
+        }
+
+        .slider-vertical::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: ns-resize;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px #3b82f6;
+        }
+
 
     </style>
 </head>
@@ -77,9 +113,14 @@
         <div id="livesContainer" class="flex space-x-2">
         </div>
     </div>
-    <a href="./index.html" class="fixed bottom-5 right-5 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors z-10">
-        返回
-    </a>
+
+    <!-- NEW: Speed Control Slider -->
+    <div class="absolute top-1/2 -translate-y-1/2 right-8 flex flex-col items-center bg-gray-800/50 p-4 rounded-lg space-y-3">
+        <label for="speedSlider" class="text-gray-300 font-semibold">速度</label>
+        <input type="range" id="speedSlider" min="2" max="12" step="0.1" class="slider-vertical">
+        <span id="speedValue" class="text-cyan-400 font-bold">6.0</span>
+    </div>
+
 
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -90,9 +131,11 @@
         const levelIndicator = document.getElementById('levelIndicator');
         const highestLevelIndicator = document.getElementById('highestLevelIndicator');
         const livesContainer = document.getElementById('livesContainer');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
         
         // --- 設定 ---
-        const PULSE_SPEED = 6.0; // --- FIX: 光暈擴散速度再次提升，讓反應更迅猛 ---
+        let PULSE_SPEED = 6.0; // --- FIX: Changed to let to be mutable ---
         const WIN_LEVEL = 100;
         const FADE_SPEED = 0.015;
         const BLACK_HOLE_GROWTH = 0.6;
@@ -150,25 +193,9 @@
                          const maxPulseRadius = radius * params.R_multiplier;
                          const color = FLUORESCENT_COLORS[Math.floor(Math.random() * FLUORESCENT_COLORS.length)];
                          let x, y;
-
-                         if (i === 0) {
-                            const safePadding = PADDING + params.max_radius;
-                            x = safePadding + Math.random() * (canvas.width - safePadding * 2);
-                            y = safePadding + Math.random() * (canvas.height - safePadding * 2);
-                         } else {
-                            const baseNode = tempNodes[Math.floor(Math.random() * tempNodes.length)];
-                            const angle = Math.random() * 2 * Math.PI;
-                            const minPlaceDistance = (baseNode.radius + radius) * params.spread_multiplier;
-                            const maxPlaceDistance = baseNode.maxPulseRadius * 0.95;
-                            if (minPlaceDistance >= maxPlaceDistance) continue;
-                            const distance = minPlaceDistance + Math.random() * (maxPlaceDistance - minPlaceDistance);
-                            x = baseNode.x + Math.cos(angle) * distance;
-                            y = baseNode.y + Math.sin(angle) * distance;
-                         }
-                         
+                         if (i === 0) { const safePadding = PADDING + params.max_radius; x = safePadding + Math.random() * (canvas.width - safePadding * 2); y = safePadding + Math.random() * (canvas.height - safePadding * 2); } else { const baseNode = tempNodes[Math.floor(Math.random() * tempNodes.length)]; const angle = Math.random() * 2 * Math.PI; const minPlaceDistance = (baseNode.radius + radius) * params.spread_multiplier; const maxPlaceDistance = baseNode.maxPulseRadius * 0.95; if (minPlaceDistance >= maxPlaceDistance) continue; const distance = minPlaceDistance + Math.random() * (maxPlaceDistance - minPlaceDistance); x = baseNode.x + Math.cos(angle) * distance; y = baseNode.y + Math.sin(angle) * distance; }
                          const newNode = new Node(x, y, radius, color, maxPulseRadius);
                          if (newNode.x < PADDING || newNode.x > canvas.width - PADDING || newNode.y < PADDING || newNode.y > canvas.height - PADDING) continue;
-                         
                          let isOverlapping = false;
                          for (const existingNode of tempNodes) { if (Math.hypot(newNode.x - existingNode.x, newNode.y - existingNode.y) < (newNode.radius + existingNode.radius) * params.spread_multiplier) { isOverlapping = true; break; } }
                          if (!isOverlapping) { tempNodes.push(newNode); placed = true; break; }
@@ -362,8 +389,19 @@
         window.addEventListener('mouseup', handleMouseUp);
         window.addEventListener('resize', setupCanvas);
         playAgainBtn.addEventListener('click', resetGame);
+
+        speedSlider.addEventListener('input', (event) => {
+            PULSE_SPEED = parseFloat(event.target.value);
+            speedValue.textContent = PULSE_SPEED.toFixed(1);
+        });
+
         window.onload = () => { 
             highestLevel = parseInt(localStorage.getItem('highestLevel')) || 1;
+            
+            // 同步初始速度到UI
+            speedSlider.value = PULSE_SPEED;
+            speedValue.textContent = PULSE_SPEED.toFixed(1);
+
             setupCanvas();
             gameLoop();
         };
