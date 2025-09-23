@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光鏈反應：創世紀</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #000000;
+            font-family: 'Inter', 'Helvetica Neue', '微軟正黑體', 'Microsoft JhengHei', sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            background-color: #0c0c0f;
+            border-radius: 0.75rem;
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.2), 0 0 50px rgba(59, 130, 246, 0.1);
+            transition: opacity 0.5s ease-in-out;
+            cursor: pointer;
+        }
+
+        .btn {
+            background-color: #3b82f6;
+            color: #ffffff;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn:hover {
+            background-color: #60a5fa;
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(96, 165, 250, 0.6);
+        }
+        
+        .life-orb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #a3e635;
+            box-shadow: 0 0 10px #a3e635, 0 0 15px #a3e635;
+            transition: all 0.3s ease;
+        }
+        .life-orb.lost {
+            background-color: #374151;
+            box-shadow: none;
+            opacity: 0.5;
+        }
+
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center h-screen text-gray-200 p-4">
+
+    <div class="text-center mb-4 h-24">
+        <h1 class="text-4xl font-bold text-blue-400 tracking-wider">光鏈反應：創世紀</h1>
+        <p id="instructions" class="text-gray-400 mt-2 text-lg">找到那個唯一的奇點，引爆整個宇宙。</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="controls" class="mt-4 space-x-4">
+        <button id="playAgainBtn" class="btn hidden">再玩一次？</button>
+    </div>
+    
+    <div id="levelIndicatorContainer" class="absolute top-5 right-5 text-lg text-right font-semibold bg-gray-800/50 px-4 py-2 rounded-lg">
+        <div id="levelIndicator">宇宙階級: 1</div>
+        <div id="highestLevelIndicator" class="text-sm text-gray-400">歷史最高: 1</div>
+    </div>
+
+    <div class="absolute top-5 left-5 flex flex-col space-y-2">
+        <div class="text-lg font-semibold text-gray-300">生命</div>
+        <div id="livesContainer" class="flex space-x-2">
+        </div>
+    </div>
+    <a href="./index.html" class="fixed bottom-5 right-5 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors z-10">
+        返回
+    </a>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const instructions = document.getElementById('instructions');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const levelIndicatorContainer = document.getElementById('levelIndicatorContainer');
+        const levelIndicator = document.getElementById('levelIndicator');
+        const highestLevelIndicator = document.getElementById('highestLevelIndicator');
+        const livesContainer = document.getElementById('livesContainer');
+        
+        // --- 設定 ---
+        const PULSE_SPEED = 6.0; // --- FIX: 光暈擴散速度再次提升，讓反應更迅猛 ---
+        const WIN_LEVEL = 100;
+        const FADE_SPEED = 0.015;
+        const BLACK_HOLE_GROWTH = 0.6;
+        const INITIAL_LIVES = 6;
+        const PADDING = 30;
+        const FLUORESCENT_COLORS = [
+            { main: '#22d3ee', glow: 'rgba(34, 211, 238, 0.7)' }, { main: '#a3e635', glow: 'rgba(163, 230, 53, 0.7)' },
+            { main: '#f472b6', glow: 'rgba(244, 114, 182, 0.7)' }, { main: '#facc15', glow: 'rgba(250, 204, 21, 0.7)' },
+            { main: '#818cf8', glow: 'rgba(129, 140, 248, 0.7)' }
+        ];
+
+        let nodes = [];
+        let blackHoles = [];
+        let meteor = null;
+        let isDraggingMeteor = false;
+        let currentLevel = 1;
+        let lives = INITIAL_LIVES;
+        let highestLevel = 1;
+        let gameState = 'INIT';
+
+        class Node {
+             constructor(x, y, radius, color, maxPulseRadius) { this.x = x; this.y = y; this.radius = radius; this.color = color; this.maxPulseRadius = maxPulseRadius; this.state = 'inactive'; this.pulseRadius = 0; this.alpha = 0; this.fadeState = 'in'; }
+            draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); if (this.state === 'active' || this.state === 'activating') { ctx.fillStyle = this.color.main; ctx.shadowColor = this.color.glow; ctx.shadowBlur = 20; } else { ctx.fillStyle = '#4b5563'; ctx.shadowBlur = 0; } ctx.fill(); ctx.shadowBlur = 0; if (this.state === 'activating') { ctx.beginPath(); ctx.arc(this.x, this.y, this.pulseRadius, 0, Math.PI * 2); ctx.strokeStyle = this.color.glow; ctx.lineWidth = 3; ctx.stroke(); } ctx.restore(); }
+            update() { if (this.fadeState === 'in') { this.alpha = Math.min(1, this.alpha + FADE_SPEED); if (this.alpha >= 1) this.fadeState = 'idle'; } else if (this.fadeState === 'out') { this.alpha = Math.max(0, this.alpha - FADE_SPEED); } if (this.state === 'activating') { this.pulseRadius += PULSE_SPEED; if (this.pulseRadius >= this.maxPulseRadius) { this.state = 'active'; this.fadeState = 'out'; } } }
+        }
+        class BlackHole {
+             constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.alpha = 0; this.fadeState = 'in'; }
+             draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = '#000000'; ctx.shadowColor = 'rgba(129, 140, 248, 0.7)'; ctx.shadowBlur = this.radius; ctx.fill(); ctx.restore(); }
+            update() { if (this.fadeState === 'in') { this.alpha = Math.min(1, this.alpha + FADE_SPEED); if (this.alpha >= 1) this.fadeState = 'idle'; } else if (this.fadeState === 'out') { this.alpha = Math.max(0, this.alpha - FADE_SPEED); } }
+        }
+        class Meteor {
+            constructor(x, y) { this.x = x; this.y = y; this.radius = 25; this.angle = Math.random() * Math.PI * 2; this.alpha = 0; this.fadeState = 'in'; }
+            draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.translate(this.x, this.y); ctx.rotate(this.angle); const starSize = this.radius; ctx.fillStyle = '#fde047'; ctx.shadowColor = 'rgba(253, 224, 71, 1)'; ctx.shadowBlur = 20; ctx.beginPath(); for (let i = 0; i < 10; i++) { const radius = i % 2 === 0 ? starSize : starSize / 2; const angle = (i * Math.PI / 5) - Math.PI / 2; ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius); } ctx.closePath(); ctx.fill(); ctx.restore(); }
+            update() { if (this.fadeState === 'in') { this.alpha = Math.min(1, this.alpha + FADE_SPEED); if (this.alpha >= 1) this.fadeState = 'idle'; } else if (this.fadeState === 'out') { this.alpha = Math.max(0, this.alpha - FADE_SPEED); } }
+            isClicked(px, py) { const dist = Math.hypot(px - this.x, py - this.y); return dist < this.radius; }
+        }
+
+        // --- 核心演算法 ---
+        function isPathBlocked(p1, p2, blackHoles, meteor) { for (const bh of blackHoles) { let dx = p2.x - p1.x; let dy = p2.y - p1.y; if (dx === 0 && dy === 0) continue; let t = ((bh.x - p1.x) * dx + (bh.y - p1.y) * dy) / (dx * dx + dy * dy); let clampedT = Math.max(0, Math.min(1, t)); let closestX = p1.x + clampedT * dx; let closestY = p1.y + clampedT * dy; let distToLine = Math.hypot(bh.x - closestX, bh.y - closestY); if (distToLine < bh.radius) { if (isShielded(p1, bh, meteor)) { continue; } return true; } } return false; }
+        function isShielded(source, target, shield) { if (!shield) return false; const dx = target.x - source.x; const dy = target.y - source.y; if (dx === 0 && dy === 0) return false; const t = ((shield.x - source.x) * dx + (shield.y - source.y) * dy) / (dx * dx + dy * dy); if (t < 0 || t > 1) return false; const closestX = source.x + t * dx; const closestY = source.y + t * dy; const distToLine = Math.hypot(shield.x - closestX, shield.y - closestY); return distToLine < shield.radius; }
+        function simulateChainReactionWithBlockers(nodeSet, startIndex, blackHoleSet, meteorObj) { if (!nodeSet || nodeSet.length === 0) return 0; let activated = new Set([startIndex]); let queue = [startIndex]; while(queue.length > 0) { const currentIndex = queue.shift(); const currentNode = nodeSet[currentIndex]; if (!currentNode) continue; for(let i = 0; i < nodeSet.length; i++) { if(!activated.has(i)) { const otherNode = nodeSet[i]; if (!isPathBlocked(currentNode, otherNode, blackHoleSet, meteorObj)) { const dist = Math.hypot(currentNode.x - otherNode.x, currentNode.y - otherNode.y); if(dist < currentNode.maxPulseRadius) { activated.add(i); queue.push(i); } } } } } return activated.size; }
+        function getDifficultyParameters(level) { const progress = Math.max(0, level - 1) / (WIN_LEVEL - 1); return { N: 2 + Math.floor(level * 0.98), R_multiplier: 7.5 + (progress * 2.5), P_cycle: 0.25 / (1 + Math.exp(-0.1 * (level - 50))), N_obs: level >= 3 ? Math.floor(Math.sqrt(level * 2)) : 0, S_obs_multiplier: 1.2 + (progress * 0.5), min_radius: Math.max(8, 20 - (progress * 12)), max_radius: Math.max(10, 25 - (progress * 15)), spread_multiplier: 1.5 + (progress * 1.5), }; }
+        function placeObstaclesAndValidate(nodes, graph, params) { if (params.N_obs === 0) return []; for (let attempt = 0; attempt < 100; attempt++) { let tempBlackHoles = []; let placedAll = true; for (let i = 0; i < params.N_obs; i++) { let placed = false; for (let bhAttempt = 0; bhAttempt < 50; bhAttempt++) { const bhRadius = params.min_radius * params.S_obs_multiplier; const edgeToBlock = graph.edges[Math.floor(Math.random() * graph.edges.length)]; if (!edgeToBlock) continue; const p1 = nodes[edgeToBlock[0]]; const p2 = nodes[edgeToBlock[1]]; const t = 0.2 + Math.random() * 0.6; const x = p1.x + t * (p2.x - p1.x); const y = p1.y + t * (p2.y - p1.y); const bh = new BlackHole(x, y, bhRadius); let isOverlapping = false; for(const node of nodes) { if(Math.hypot(bh.x - node.x, bh.y - node.y) < node.radius + bh.radius + 10) { isOverlapping = true; break; } } if (!isOverlapping) { tempBlackHoles.push(bh); placed = true; break; } } if(!placed) { placedAll = false; break; } } if(!placedAll) continue; let solutionExists = false; for (let i = 0; i < nodes.length; i++) { if (simulateChainReactionWithBlockers(nodes, i, tempBlackHoles, null) === nodes.length) { solutionExists = true; break; } } if (solutionExists) return tempBlackHoles; } return null; }
+        
+        function generateLevel(level) {
+            for(let levelAttempt = 0; levelAttempt < 50; levelAttempt++){
+                const params = getDifficultyParameters(level);
+                let tempNodes = [];
+                let allNodesPlaced = true;
+                
+                for (let i = 0; i < params.N; i++) {
+                    let placed = false;
+                    for (let attempt = 0; attempt < 100; attempt++) {
+                         const radius = params.min_radius + Math.random() * (params.max_radius - params.min_radius);
+                         const maxPulseRadius = radius * params.R_multiplier;
+                         const color = FLUORESCENT_COLORS[Math.floor(Math.random() * FLUORESCENT_COLORS.length)];
+                         let x, y;
+
+                         if (i === 0) {
+                            const safePadding = PADDING + params.max_radius;
+                            x = safePadding + Math.random() * (canvas.width - safePadding * 2);
+                            y = safePadding + Math.random() * (canvas.height - safePadding * 2);
+                         } else {
+                            const baseNode = tempNodes[Math.floor(Math.random() * tempNodes.length)];
+                            const angle = Math.random() * 2 * Math.PI;
+                            const minPlaceDistance = (baseNode.radius + radius) * params.spread_multiplier;
+                            const maxPlaceDistance = baseNode.maxPulseRadius * 0.95;
+                            if (minPlaceDistance >= maxPlaceDistance) continue;
+                            const distance = minPlaceDistance + Math.random() * (maxPlaceDistance - minPlaceDistance);
+                            x = baseNode.x + Math.cos(angle) * distance;
+                            y = baseNode.y + Math.sin(angle) * distance;
+                         }
+                         
+                         const newNode = new Node(x, y, radius, color, maxPulseRadius);
+                         if (newNode.x < PADDING || newNode.x > canvas.width - PADDING || newNode.y < PADDING || newNode.y > canvas.height - PADDING) continue;
+                         
+                         let isOverlapping = false;
+                         for (const existingNode of tempNodes) { if (Math.hypot(newNode.x - existingNode.x, newNode.y - existingNode.y) < (newNode.radius + existingNode.radius) * params.spread_multiplier) { isOverlapping = true; break; } }
+                         if (!isOverlapping) { tempNodes.push(newNode); placed = true; break; }
+                    }
+                    if (!placed) { allNodesPlaced = false; break; }
+                }
+
+                if (!allNodesPlaced) continue;
+
+                const allEdges = [];
+                for(let i = 0; i < tempNodes.length; i++){ for(let j = i + 1; j < tempNodes.length; j++){ allEdges.push([i, j]); } }
+                const tempGraph = { points: tempNodes, edges: allEdges };
+                
+                const finalBlackHoles = placeObstaclesAndValidate(tempNodes, tempGraph, params);
+                if(finalBlackHoles === null && params.N_obs > 0) continue;
+
+                let finalMeteor = null;
+                if (level >= 3) {
+                    finalMeteor = new Meteor(canvas.width / 2, PADDING * 2);
+                }
+                
+                let solutionExists = false;
+                if (params.N_obs === 0) {
+                    solutionExists = true;
+                } else {
+                    for (let j = 0; j < tempNodes.length; j++) {
+                        if (simulateChainReactionWithBlockers(tempNodes, j, finalBlackHoles || [], finalMeteor) === tempNodes.length) {
+                            solutionExists = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (solutionExists) {
+                    console.log(`成功生成階級 ${level} 的可解關卡`);
+                    return { nodes: tempNodes, blackHoles: finalBlackHoles || [], meteor: finalMeteor };
+                }
+            }
+            console.error(`在所有嘗試後，仍無法生成有效的 ${level} 階關卡。`);
+            return null;
+        }
+
+        function initLevel() { 
+            gameState = 'GENERATING';
+            if(currentLevel > highestLevel) {
+                highestLevel = currentLevel;
+                localStorage.setItem('highestLevel', highestLevel);
+            }
+            updateUI();
+            instructions.textContent = '演算中...';
+            setTimeout(() => {
+                const levelData = generateLevel(currentLevel);
+                if(levelData) {
+                    nodes = levelData.nodes;
+                    blackHoles = levelData.blackHoles;
+                    meteor = levelData.meteor;
+                    gameState = 'FADING_IN';
+                } else {
+                    instructions.textContent = '宇宙法則崩潰！請刷新頁面重塑世界。';
+                    gameState = 'GAME_OVER';
+                }
+            }, 100);
+        }
+
+        function updateUI() {
+            levelIndicator.textContent = `宇宙階級: ${currentLevel}`;
+            highestLevelIndicator.textContent = `歷史最高: ${highestLevel}`;
+            livesContainer.innerHTML = '';
+            for (let i = 0; i < INITIAL_LIVES; i++) {
+                const orb = document.createElement('div');
+                orb.classList.add('life-orb');
+                if (i >= lives) { orb.classList.add('lost'); }
+                livesContainer.appendChild(orb);
+            }
+        }
+
+        function setupCanvas() { 
+            const newWidth = Math.min(window.innerWidth * 0.95, 1600);
+            const newHeight = Math.min(window.innerHeight * 0.75, 900);
+            if (canvas.width !== newWidth || canvas.height !== newHeight) {
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+            }
+            initLevel();
+        }
+
+        function handleMouseDown(event) { if (gameState !== 'AWAITING_CLICK' || !meteor) return; const rect = canvas.getBoundingClientRect(); const mousePos = { x: event.clientX - rect.left, y: event.clientY - rect.top }; if (meteor.isClicked(mousePos.x, mousePos.y)) { isDraggingMeteor = true; canvas.style.cursor = 'grabbing'; } }
+        function handleMouseMove(event) { if (!isDraggingMeteor || !meteor) return; const rect = canvas.getBoundingClientRect(); const mousePos = { x: event.clientX - rect.left, y: event.clientY - rect.top }; meteor.x = mousePos.x; meteor.y = mousePos.y; }
+        function handleMouseUp(event) { if (isDraggingMeteor) { isDraggingMeteor = false; canvas.style.cursor = 'pointer'; } }
+        function handleClick(event) {
+            if (gameState !== 'AWAITING_CLICK' || isDraggingMeteor) return;
+            const rect = canvas.getBoundingClientRect();
+            const mousePos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+            let clickedNode = null;
+            let minDistance = Infinity;
+            nodes.forEach(node => {
+                const dist = Math.hypot(node.x - mousePos.x, node.y - mousePos.y);
+                if (dist < node.radius && dist < minDistance) { minDistance = dist; clickedNode = node; }
+            });
+            if (clickedNode) {
+                gameState = 'CHAIN_REACTION';
+                instructions.textContent = '連鎖反應中...';
+                clickedNode.state = 'activating';
+            }
+        }
+        
+        function checkWinCondition() {
+             const activeNodes = nodes.filter(node => node.state === 'active' || node.state === 'activating').length;
+             if (activeNodes === nodes.length) {
+                 gameState = 'SUCCESS_FADE_OUT';
+                 instructions.textContent = '觀測到宇宙大爆炸！成功！';
+             } else {
+                 lives--; 
+                 updateUI();
+                 if (lives <= 0) {
+                    gameState = 'GAME_OVER';
+                    instructions.textContent = '生命之火已熄滅...';
+                    playAgainBtn.classList.remove('hidden');
+                 } else {
+                    gameState = 'FAIL_FADE_OUT';
+                    instructions.textContent = '宇宙歸於沉寂...';
+                 }
+             }
+             [...nodes, ...blackHoles].forEach(o => o.fadeState = 'out');
+             if(meteor) meteor.fadeState = 'out';
+        }
+
+        function showWinScreen() { 
+            gameState = 'GAME_OVER';
+            playAgainBtn.classList.remove('hidden');
+            levelIndicatorContainer.classList.add('hidden');
+            instructions.innerHTML = `太厲害了！<br>你已抵達 ${WIN_LEVEL} 階宇宙的盡頭！`;
+            instructions.classList.add('text-2xl', 'text-yellow-300');
+        }
+
+        function resetGame() {
+            playAgainBtn.classList.add('hidden');
+            levelIndicatorContainer.classList.remove('hidden');
+            currentLevel = 1;
+            lives = INITIAL_LIVES;
+            initLevel();
+        }
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (gameState === 'CHAIN_REACTION') {
+                const activatingNodes = [...nodes.filter(n => n.state === 'activating')];
+                activatingNodes.forEach(activator => {
+                    nodes.forEach(target => {
+                        if (target.state === 'inactive') {
+                           if (!isPathBlocked(activator, target, blackHoles, meteor)) {
+                               const dist = Math.hypot(activator.x - target.x, activator.y - target.y);
+                               if (dist < activator.pulseRadius) { target.state = 'activating'; }
+                           }
+                        }
+                    });
+                    blackHoles.forEach(bh => {
+                        const distToPulse = Math.hypot(activator.x - bh.x, activator.y - bh.y);
+                        if(distToPulse < activator.pulseRadius + bh.radius && !isShielded(activator, bh, meteor)) {
+                             bh.radius += BLACK_HOLE_GROWTH;
+                        }
+                    });
+                });
+            }
+            let allFadedIn = true;
+            let allFadedOut = true;
+            [...nodes, ...blackHoles, meteor].filter(o => o).forEach(obj => { obj.update(); obj.draw(); if (obj.fadeState === 'in') allFadedIn = false; if (obj.alpha > 0.01) allFadedOut = false; });
+            switch (gameState) {
+                case 'FADING_IN':
+                    if (allFadedIn) { gameState = 'AWAITING_CLICK'; instructions.textContent = '找到那個唯一的奇點，引爆整個宇宙。'; }
+                    break;
+                case 'CHAIN_REACTION':
+                    const stillActivating = nodes.some(n => n.state === 'activating');
+                    if (!stillActivating) { checkWinCondition(); }
+                    break;
+                case 'SUCCESS_FADE_OUT':
+                    if (allFadedOut) { currentLevel++; if (currentLevel > WIN_LEVEL) { showWinScreen(); } else { initLevel(); } }
+                    break;
+                case 'FAIL_FADE_OUT':
+                    if (allFadedOut) { initLevel(); }
+                    break;
+                case 'GAME_OVER':
+                    break;
+            }
+        }
+
+        canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('resize', setupCanvas);
+        playAgainBtn.addEventListener('click', resetGame);
+        window.onload = () => { 
+            highestLevel = parseInt(localStorage.getItem('highestLevel')) || 1;
+            setupCanvas();
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
+

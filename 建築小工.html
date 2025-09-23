@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>建築小工人 v2.2: 責任制工頭AI</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #333;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            cursor: default; 
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(145deg, #4caf50, #45a049);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: all 0.2s ease-in-out;
+            z-index: 10;
+        }
+        #startButton:hover {
+            transform: translate(-50%, -52%);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <button id="startButton">開始遊戲</button>
+    </div>
+
+    <script>
+        // --- 1. 初始化設定 ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        let isGameRunning = false;
+        let isPaused = false; 
+        let currentStatusText = '待命中';
+        
+        let dispatchCooldown = 0;
+        const DISPATCH_INTERVAL = 5; // 每 5 幀可以派一個新工人，節奏更快
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            floor.y = canvas.height - floor.height;
+            warehouse.y = canvas.height - floor.height - warehouse.height;
+        });
+
+        // --- 2. 遊戲物件 ---
+        const mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+        const workers = [];
+        const maxWorkers = 15;
+        const floor = { height: 20, color: '#5D4037' };
+        floor.y = canvas.height - floor.height;
+        const warehouse = { x: 30, y: canvas.height - floor.height - 100, width: 100, height: 100, color: '#A1887F' };
+        
+        const building = { 
+            x: null, 
+            pieces: [], 
+            pieceWidth: 25, 
+            pieceHeight: 10,
+            flag: { isVisible: false, x: 0, y: 0 }
+        };
+
+        // --- 3. 事件監聽 ---
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = event.clientX;
+            mouse.y = event.clientY;
+        });
+        
+        startButton.addEventListener('click', () => {
+            isGameRunning = true;
+            startButton.style.display = 'none';
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (isGameRunning && event.key.toLowerCase() === 'p') {
+                isPaused = !isPaused;
+            }
+        });
+
+        // --- 4. 遊戲核心迴圈 (Function Definition) ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameRunning && !isPaused) {
+                if (dispatchCooldown > 0) dispatchCooldown--;
+                updateOverallTask();
+                for (let i = workers.length - 1; i >= 0; i--) {
+                    const worker = workers[i];
+                    if (worker.state === 'LEAVING') {
+                        worker.disappearTimer--;
+                        if (worker.disappearTimer <= 0) {
+                            workers.splice(i, 1);
+                        }
+                    } else {
+                        updateWorkerMovement(worker, i);
+                    }
+                }
+            }
+
+            // --- 繪圖區 ---
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = floor.color;
+            ctx.fillRect(0, floor.y, canvas.width, floor.height);
+            ctx.fillStyle = warehouse.color;
+            ctx.fillRect(warehouse.x, warehouse.y, warehouse.width, warehouse.height);
+            ctx.fillStyle = '#D7CCC8';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('木材倉庫', warehouse.x + warehouse.width / 2, warehouse.y + warehouse.height / 2 + 5);
+
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText(currentStatusText, canvas.width - 20, 30);
+
+            for (let i = workers.length - 1; i >= 0; i--) {
+                const worker = workers[i];
+                ctx.fillStyle = worker.color;
+                ctx.fillRect(worker.x - worker.width / 2, worker.y - worker.height / 2, worker.width, worker.height);
+                if (worker.hasWood) {
+                    ctx.fillStyle = '#795548';
+                    ctx.fillRect(worker.x - 5, worker.y - 10, 10, 10);
+                }
+            }
+            
+            ctx.fillStyle = '#C5E1A5';
+            building.pieces.forEach(piece => {
+                ctx.fillRect(piece.x - building.pieceWidth / 2, piece.y, building.pieceWidth, building.pieceHeight);
+            });
+            
+            if (building.flag.isVisible) {
+                ctx.fillStyle = '#616161';
+                ctx.fillRect(building.flag.x - 1, building.flag.y - 30, 2, 30);
+                ctx.fillStyle = '#E53935';
+                ctx.beginPath();
+                ctx.moveTo(building.flag.x, building.flag.y - 30);
+                ctx.lineTo(building.flag.x + 15, building.flag.y - 25);
+                ctx.lineTo(building.flag.x, building.flag.y - 20);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            if (isPaused) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '50px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('已暫停 (Paused)', canvas.width / 2, canvas.height / 2);
+            }
+        }
+        
+        // --- 5. 輔助函式 (Helper Functions) ---
+        function updateOverallTask() {
+            let overallTask = 'IDLE';
+            let effectiveTarget = 0; // 我們期望的最終方塊數量
+            const isRelocating = building.x !== null && Math.abs(building.x - mouse.x) > building.pieceWidth * 1.5;
+
+            // 判斷當前的主要任務和目標方塊數
+            if (isRelocating || mouse.y >= floor.y) {
+                // 如果要搬家，或滑鼠在地板及以下，目標就是全部拆光
+                effectiveTarget = 0;
+                if (building.pieces.length > 0) {
+                    overallTask = 'DEMOLISH';
+                } else {
+                    building.x = null; // 拆完了，工地位置重置
+                }
+            } else {
+                // 正常在建造區
+                const targetHeight = floor.y - mouse.y;
+                effectiveTarget = Math.max(0, Math.floor(targetHeight / building.pieceHeight));
+
+                if (building.pieces.length > effectiveTarget) {
+                    overallTask = 'DEMOLISH';
+                } else if (building.pieces.length < effectiveTarget) {
+                    overallTask = 'BUILD';
+                    if (building.x === null) building.x = mouse.x;
+                }
+            }
+            
+            if (overallTask === 'DEMOLISH' && building.flag.isVisible) {
+                building.flag.isVisible = false;
+            }
+            
+            if(overallTask === 'BUILD') currentStatusText = '建造中...';
+            else if (overallTask === 'DEMOLISH') currentStatusText = '拆除中...';
+            else currentStatusText = '待命中';
+
+            // --- 智慧調度 AI ---
+            if (dispatchCooldown > 0 || workers.length >= maxWorkers) return; 
+
+            const buildingWorkersCount = workers.filter(w => w.state === 'BUILDING').length;
+            const demolishingWorkersCount = workers.filter(w => w.state === 'DEMOLISHING').length;
+
+            let shouldDispatch = false;
+            let taskType = '';
+
+            if (overallTask === 'BUILD') {
+                const pendingPieces = building.pieces.length + buildingWorkersCount;
+                if (pendingPieces < effectiveTarget) {
+                    shouldDispatch = true;
+                    taskType = 'BUILD';
+                }
+            } else if (overallTask === 'DEMOLISH') {
+                const pendingPieces = building.pieces.length - demolishingWorkersCount;
+                if (pendingPieces > effectiveTarget) {
+                    shouldDispatch = true;
+                    taskType = 'DEMOLISH';
+                }
+            }
+
+            if(shouldDispatch){
+                dispatchWorker(taskType, buildingWorkersCount, demolishingWorkersCount);
+                dispatchCooldown = DISPATCH_INTERVAL;
+            }
+        }
+
+        function dispatchWorker(taskType, buildingWorkersCount, demolishingWorkersCount) {
+            const newWorker = {
+                x: warehouse.x + warehouse.width / 2, y: warehouse.y + warehouse.height / 2,
+                width: 15, height: 15,
+                color: `hsl(${Math.random() * 360}, 80%, 60%)`,
+                speed: 2 + Math.random() * 1.5,
+                state: 'IDLE', hasWood: false, path: [],
+                disappearTimer: 0
+            };
+
+            if (taskType === 'BUILD') {
+                newWorker.state = 'BUILDING';
+                newWorker.hasWood = true;
+                const targetPieceIndex = building.pieces.length + buildingWorkersCount;
+                const targetY = floor.y - (targetPieceIndex * building.pieceHeight) - building.pieceHeight - newWorker.height / 2;
+                setWorkerPath(newWorker, building.x, targetY);
+            } else { // DEMOLISH
+                newWorker.state = 'DEMOLISHING';
+                const targetPieceIndex = building.pieces.length - demolishingWorkersCount;
+                const remainingPieces = Math.max(0, targetPieceIndex - 1);
+                const targetY = floor.y - (remainingPieces * building.pieceHeight) - newWorker.height / 2;
+                setWorkerPath(newWorker, building.x, targetY);
+            }
+            workers.push(newWorker);
+        }
+        
+        function setWorkerPath(worker, targetX, targetY) {
+            worker.path = [];
+            const groundY = canvas.height - floor.height - worker.height / 2;
+            worker.path.push({ x: worker.x, y: groundY });
+            worker.path.push({ x: targetX, y: groundY });
+            worker.path.push({ x: targetX, y: targetY });
+        }
+
+        function updateWorkerMovement(worker, index) {
+            if (worker.path.length === 0) return;
+            const target = worker.path[0];
+            const dx = target.x - worker.x;
+            const dy = target.y - worker.y;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance < worker.speed) {
+                worker.x = target.x; worker.y = target.y;
+                worker.path.shift(); 
+                if (worker.path.length === 0) handleArrival(worker, index); 
+            } else {
+                worker.x += (dx / distance) * worker.speed;
+                worker.y += (dy / distance) * worker.speed;
+            }
+        }
+        
+        function handleArrival(worker, index) {
+            if (worker.state === 'BUILDING') {
+                const pieceY = floor.y - (building.pieces.length * building.pieceHeight) - building.pieceHeight;
+                const currentTargetHeight = floor.y - mouse.y;
+                const currentTargetPieceCount = Math.max(0, Math.floor(currentTargetHeight / building.pieceHeight));
+
+                if (building.x !== null && building.pieces.length < currentTargetPieceCount) {
+                    building.pieces.push({ x: building.x, y: pieceY });
+                    if (building.pieces.length >= currentTargetPieceCount && currentTargetPieceCount > 0) {
+                        building.flag.isVisible = true;
+                        building.flag.x = building.x;
+                        building.flag.y = pieceY;
+                    }
+                }
+                workers.splice(index, 1);
+            } else if (worker.state === 'DEMOLISHING') {
+                if (building.pieces.length > 0) {
+                    building.pieces.pop();
+                }
+                worker.state = 'LEAVING';
+                worker.disappearTimer = 15;
+            }
+        }
+
+        // --- 6. 啟動遊戲 ---
+        animate();
+    </script>
+</body>
+</html>
+
