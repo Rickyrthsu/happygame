@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>五子棋大戰 - 專業版</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 FontAwesome 圖標 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Roboto+Mono:wght@500&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f2f5;
+            touch-action: manipulation;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 棋盤樣式 */
+        .board-wrapper {
+            position: relative;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .board-container {
+            position: relative;
+            background-color: #eebb77; /* 棋盤底色 */
+            background-image: 
+                linear-gradient(45deg, rgba(0,0,0,0.03) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.03) 75%, rgba(0,0,0,0.03)), 
+                linear-gradient(45deg, rgba(0,0,0,0.03) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.03) 75%, rgba(0,0,0,0.03));
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            cursor: pointer;
+            aspect-ratio: 1 / 1;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 6px;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 覆蓋層 */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            border-radius: 6px;
+        }
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* 主選單 */
+        #menu-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #fffbeb 0%, #f59e0b 100%);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #menu-screen.hidden-screen {
+            transform: translateY(-100%);
+        }
+
+        /* 遊戲區域 */
+        #game-screen {
+            opacity: 0;
+            transition: opacity 0.5s ease 0.3s;
+            pointer-events: none;
+        }
+        #game-screen.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .btn { transition: all 0.2s; }
+        .btn:active { transform: scale(0.96); }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .dot-black { background-color: #1a1a1a; border: 1px solid #444; }
+        .dot-white { background-color: #ffffff; border: 1px solid #ccc; }
+
+        /* 自定義按鈕樣式 - 修復 CDN 相容性問題 */
+        .select-card {
+            border: 2px solid #e5e7eb; /* gray-200 */
+            background-color: white;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .select-card:hover {
+            background-color: #f9fafb; /* gray-50 */
+            border-color: #d1d5db; /* gray-300 */
+        }
+        .select-card.active {
+            border-color: #4f46e5; /* indigo-600 */
+            background-color: #eef2ff; /* indigo-50 */
+            color: #4338ca; /* indigo-700 */
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.1), 0 2px 4px -1px rgba(79, 70, 229, 0.06);
+        }
+        
+        /* 難度特定顏色 */
+        .select-card.active[data-diff="easy"] {
+            border-color: #10b981; /* emerald-500 */
+            background-color: #ecfdf5; /* emerald-50 */
+            color: #047857; /* emerald-700 */
+        }
+        .select-card.active[data-diff="medium"] {
+            border-color: #3b82f6; /* blue-500 */
+            background-color: #eff6ff; /* blue-50 */
+            color: #1d4ed8; /* blue-700 */
+        }
+        .select-card.active[data-diff="hard"] {
+            border-color: #ef4444; /* red-500 */
+            background-color: #fef2f2; /* red-50 */
+            color: #b91c1c; /* red-700 */
+        }
+
+        /* 工具列開關 */
+        .toggle-switch {
+            appearance: none;
+            width: 36px;
+            height: 20px;
+            background: #d1d5db;
+            border-radius: 20px;
+            position: relative;
+            outline: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-switch:checked {
+            background: #4f46e5;
+        }
+        .toggle-switch:checked::after {
+            transform: translateX(16px);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- 主選單 (Menu Screen) -->
+    <div id="menu-screen">
+        <div class="bg-white/95 p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-[90%] text-center backdrop-blur-md border border-white/50 relative">
+            <h1 class="text-4xl md:text-5xl font-bold text-amber-800 mb-2 drop-shadow-sm">
+                <i class="fa-solid fa-chess-board mr-3"></i>五子棋
+            </h1>
+            <p class="text-gray-500 mb-8 tracking-wider font-medium">PROFESSIONAL GOBANG</p>
+
+            <!-- 模式選擇區 -->
+            <div class="space-y-4">
+                
+                <!-- 雙人對戰 -->
+                <button onclick="startGame('pvp')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-3 text-lg shadow-lg transition transform hover:-translate-y-1 btn border-b-4 border-emerald-800">
+                    <i class="fa-solid fa-user-group text-2xl"></i> 
+                    <div class="text-left">
+                        <div class="text-lg leading-tight">雙人對戰</div>
+                        <div class="text-xs opacity-80 font-normal">與朋友同機切磋</div>
+                    </div>
+                </button>
+
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-gray-300"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-400 text-xs tracking-widest">AI 對戰設定</span>
+                    <div class="flex-grow border-t border-gray-300"></div>
+                </div>
+
+                <!-- 挑戰 AI 設定區 (優化版介面) -->
+                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200 shadow-inner text-left">
+                    <div class="flex items-center gap-2 mb-4 text-indigo-800 font-bold border-b border-gray-200 pb-2">
+                        <i class="fa-solid fa-robot"></i> 挑戰人工智慧
+                    </div>
+                    
+                    <!-- 難度設定：三欄卡片式設計 -->
+                    <div class="mb-5">
+                        <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">AI 難度</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setAiSettings('diff', 'easy')" id="btn-diff-easy" class="select-card rounded-lg py-3 flex flex-col items-center justify-center gap-1" data-diff="easy">
+                                <i class="fa-solid fa-seedling text-lg mb-1"></i>
+                                <span class="text-sm font-bold">入門</span>
+                            </button>
+                            <button onclick="setAiSettings('diff', 'medium')" id="btn-diff-medium" class="select-card rounded-lg py-3 flex flex-col items-center justify-center gap-1 active" data-diff="medium">
+                                <i class="fa-solid fa-shield-halved text-lg mb-1"></i>
+                                <span class="text-sm font-bold">普通</span>
+                            </button>
+                            <button onclick="setAiSettings('diff', 'hard')" id="btn-diff-hard" class="select-card rounded-lg py-3 flex flex-col items-center justify-center gap-1" data-diff="hard">
+                                <i class="fa-solid fa-fire text-lg mb-1"></i>
+                                <span class="text-sm font-bold">困難</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 執棋設定：雙欄大按鈕設計 -->
+                    <div class="mb-5">
+                        <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">選擇執棋</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="setAiSettings('color', 'black')" id="btn-color-black" class="select-card rounded-lg py-3 px-2 flex items-center justify-center gap-2 active">
+                                <span class="w-6 h-6 rounded-full bg-gray-900 border border-gray-600 shadow-sm"></span>
+                                <div class="text-left">
+                                    <div class="text-sm font-bold">執黑 (先)</div>
+                                </div>
+                            </button>
+                            <button onclick="setAiSettings('color', 'white')" id="btn-color-white" class="select-card rounded-lg py-3 px-2 flex items-center justify-center gap-2">
+                                <span class="w-6 h-6 rounded-full bg-white border border-gray-300 shadow-sm"></span>
+                                <div class="text-left">
+                                    <div class="text-sm font-bold">執白 (後)</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="startGame('pve')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition transform active:scale-95 flex items-center justify-center gap-2 border-b-4 border-indigo-800 text-lg">
+                        開始挑戰 <i class="fa-solid fa-play"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <footer class="mt-8 text-gray-400 text-xs">
+                v3.3 Professional • Designed by Ricky
+            </footer>
+        </div>
+
+        <!-- 這裡加入了您要求的返回按鈕 -->
+        <!-- 使用 fixed 定位，但放在 transform 的父容器內，所以會跟著選單一起滑動消失，不會干擾遊戲 -->
+        <a href="./index.html" class="fixed bottom-5 right-5 bg-stone-600 hover:bg-stone-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-colors z-50 flex items-center gap-2 backdrop-blur-sm bg-opacity-90">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> 返回首頁
+        </a>
+    </div>
+
+    <!-- 遊戲主畫面 (Game Screen) -->
+    <div id="game-screen" class="flex flex-col items-center min-h-screen py-4 px-3 select-none w-full max-w-2xl mx-auto">
+        
+        <!-- 頂部功能列 -->
+        <div class="w-full flex justify-between items-center mb-3">
+            <button onclick="backToMenu()" class="text-gray-600 hover:text-amber-700 font-bold flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow-sm hover:shadow transition text-sm">
+                <i class="fa-solid fa-chevron-left"></i> 選單
+            </button>
+            <div class="flex items-center gap-3">
+                 <label class="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg shadow-sm">
+                    <span class="text-xs text-gray-600 font-bold">顯示手數</span>
+                    <input type="checkbox" id="toggle-numbers" class="toggle-switch" onchange="toggleMoveNumbers()">
+                </label>
+                <button onclick="toggleSound()" id="btn-sound" class="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-600 hover:text-blue-600">
+                    <i class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 玩家狀態與標題 -->
+        <div class="w-full bg-white rounded-xl shadow-md p-3 mb-4 border border-gray-100">
+            <div class="text-center mb-2">
+                 <span id="game-title" class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded tracking-wide border border-amber-100">人機對戰 - 普通</span>
+            </div>
+            
+            <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2">
+                <!-- 黑方 -->
+                <div id="player-indicator-black" class="flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="status-dot dot-black w-4 h-4"></span>
+                        <span class="font-bold text-gray-800">黑棋</span>
+                    </div>
+                    <span id="name-black" class="text-xs text-gray-500">玩家</span>
+                </div>
+
+                <!-- VS -->
+                <div class="px-4 text-gray-300 font-black italic text-xl">VS</div>
+
+                <!-- 白方 -->
+                <div id="player-indicator-white" class="flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="status-dot dot-white w-4 h-4"></span>
+                        <span class="font-bold text-gray-800">白棋</span>
+                    </div>
+                    <span id="name-white" class="text-xs text-gray-500">AI</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 棋盤區域 -->
+        <div class="board-wrapper">
+            <div class="board-container" id="board-container">
+                <canvas id="gameCanvas"></canvas>
+                
+                <!-- 勝利/結算畫面 -->
+                <div id="win-overlay" class="overlay">
+                    <div class="bg-white/95 text-gray-800 p-8 rounded-2xl shadow-2xl text-center transform transition-all w-[85%] max-w-sm border border-white/50 backdrop-blur-sm">
+                        <div class="mb-4 relative inline-block">
+                             <div class="absolute inset-0 bg-yellow-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
+                             <i id="win-icon" class="fa-solid fa-trophy text-yellow-500 text-6xl relative z-10 drop-shadow-md"></i>
+                        </div>
+                        
+                        <h3 id="win-title" class="text-3xl font-black mb-2 bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-yellow-600">黑棋獲勝！</h3>
+                        <p id="win-message" class="text-gray-500 mb-8 font-medium">攻勢凌厲，勢如破竹！</p>
+                        
+                        <div class="space-y-3">
+                            <button onclick="resetGame()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-rotate-right"></i> 再戰一局
+                            </button>
+                            <button onclick="backToMenu()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-house"></i> 回主選單
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部控制按鈕 -->
+        <div class="w-full flex gap-3 mt-4">
+             <button onclick="undoMove()" class="flex-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold py-3 rounded-xl shadow-sm transition active:bg-gray-100 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-left text-gray-400"></i> 悔棋
+            </button>
+            <button onclick="resetGame()" class="flex-1 bg-white hover:bg-gray-50 text-amber-600 border border-gray-200 font-bold py-3 rounded-xl shadow-sm transition active:bg-gray-100 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrows-rotate"></i> 重置盤面
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * 遊戲設定與常數
+         */
+        const BOARD_SIZE = 15;
+        const EMPTY = 0;
+        const BLACK = 1;
+        const WHITE = 2;
+        
+        // 核心變數
+        let canvas, ctx;
+        let board = [];
+        let currentPlayer = BLACK;
+        let isGameActive = false;
+        let moveHistory = []; 
+        
+        // UI 與 繪圖參數
+        let cellSize = 0;
+        let padding = 0; 
+        let showMoveNumbers = false;
+        let soundEnabled = true;
+
+        // 遊戲模式設定
+        let gameSettings = {
+            mode: 'pve', 
+            aiDiff: 'medium', 
+            playerColor: BLACK 
+        };
+
+        // 音效 Context
+        let audioCtx = null;
+
+        /**
+         * 初始化
+         */
+        window.onload = function() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            window.addEventListener('resize', handleResize);
+            canvas.addEventListener('mousedown', handleInput);
+            canvas.addEventListener('touchstart', handleInput, {passive: false});
+
+            // 初始狀態
+            updateMenuUi();
+        };
+
+        function initAudio() {
+            if (!audioCtx && typeof (window.AudioContext || window.webkitAudioContext) !== 'undefined') {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        /**
+         * 音效生成系統
+         */
+        function playSound(type) {
+            if (!soundEnabled || !audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'move') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'win') {
+                playNote(523.25, 0, 0.4); 
+                playNote(659.25, 0.1, 0.4); 
+                playNote(783.99, 0.2, 0.6); 
+                playNote(1046.50, 0.4, 1.0);
+            } else if (type === 'lose') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.5);
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            }
+        }
+
+        function playNote(freq, delay, duration) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime + delay;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('btn-sound');
+            if (soundEnabled) {
+                btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+                btn.classList.remove('text-gray-400');
+                btn.classList.add('text-gray-600', 'hover:text-blue-600');
+            } else {
+                btn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+                btn.classList.add('text-gray-400');
+                btn.classList.remove('text-gray-600', 'hover:text-blue-600');
+            }
+        }
+
+        /**
+         * 選單與設定邏輯
+         */
+        function setAiSettings(type, value) {
+            if (type === 'diff') {
+                gameSettings.aiDiff = value;
+                ['easy', 'medium', 'hard'].forEach(d => {
+                    const btn = document.getElementById(`btn-diff-${d}`);
+                    if (d === value) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                });
+            } else if (type === 'color') {
+                gameSettings.playerColor = (value === 'black') ? BLACK : WHITE;
+                ['black', 'white'].forEach(c => {
+                    const btn = document.getElementById(`btn-color-${c}`);
+                    if (c === value) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                });
+            }
+        }
+
+        function startGame(mode) {
+            initAudio(); 
+            gameSettings.mode = mode;
+
+            document.getElementById('menu-screen').classList.add('hidden-screen');
+            document.getElementById('game-screen').classList.add('visible');
+            
+            updateGameHeader();
+            handleResize();
+            initBoard();
+        }
+
+        function backToMenu() {
+            if (isGameActive && moveHistory.length > 0) {
+                if (!confirm('正在遊戲中，確定要返回選單嗎？')) return;
+            }
+            document.getElementById('menu-screen').classList.remove('hidden-screen');
+            document.getElementById('game-screen').classList.remove('visible');
+            isGameActive = false;
+        }
+
+        function updateGameHeader() {
+            const titleEl = document.getElementById('game-title');
+            const pBlackName = document.getElementById('name-black');
+            const pWhiteName = document.getElementById('name-white');
+            
+            const diffText = { 'easy': '入門', 'medium': '普通', 'hard': '困難' };
+
+            if (gameSettings.mode === 'pvp') {
+                titleEl.textContent = "雙人對戰";
+                pBlackName.textContent = "玩家 1";
+                pWhiteName.textContent = "玩家 2";
+            } else {
+                titleEl.textContent = `挑戰 AI (${diffText[gameSettings.aiDiff]})`;
+                if (gameSettings.playerColor === BLACK) {
+                    pBlackName.textContent = "玩家 (你)";
+                    pWhiteName.textContent = `AI (${diffText[gameSettings.aiDiff]})`;
+                } else {
+                    pBlackName.textContent = `AI (${diffText[gameSettings.aiDiff]})`;
+                    pWhiteName.textContent = "玩家 (你)";
+                }
+            }
+        }
+
+        function toggleMoveNumbers() {
+            showMoveNumbers = document.getElementById('toggle-numbers').checked;
+            drawBoard();
+        }
+
+        /**
+         * 遊戲核心邏輯
+         */
+        function initBoard() {
+            board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(EMPTY));
+            currentPlayer = BLACK;
+            isGameActive = true;
+            moveHistory = [];
+            
+            updateTurnIndicator();
+            document.getElementById('win-overlay').classList.remove('active');
+            drawBoard();
+
+            if (gameSettings.mode === 'pve') {
+                if (gameSettings.playerColor === WHITE) {
+                    setTimeout(() => {
+                        placePiece(7, 7);
+                    }, 600);
+                }
+            }
+        }
+
+        function resetGame() {
+            if (isGameActive && moveHistory.length > 0) {
+                 if (!confirm('確定要重新開始本局遊戲嗎？')) return;
+            }
+            initBoard();
+        }
+
+        function handleResize() {
+            const container = document.getElementById('board-container');
+            const size = container.clientWidth;
+            
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = size * dpr;
+            canvas.height = size * dpr;
+            canvas.style.width = size + 'px';
+            canvas.style.height = size + 'px';
+            ctx.scale(dpr, dpr);
+            
+            padding = size * 0.08; 
+            const drawArea = size - 2 * padding;
+            cellSize = drawArea / (BOARD_SIZE - 1);
+            
+            drawBoard();
+        }
+
+        function handleInput(e) {
+            if (!isGameActive) return;
+            if (e.type === 'touchstart') e.preventDefault();
+
+            const isAiTurn = gameSettings.mode === 'pve' && currentPlayer !== gameSettings.playerColor;
+            if (isAiTurn) return;
+
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+
+            if (e.type === 'touchstart') {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            const col = Math.floor((x - padding + cellSize / 2) / cellSize);
+            const row = Math.floor((y - padding + cellSize / 2) / cellSize);
+
+            if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+                if (board[row][col] === EMPTY) {
+                    placePiece(row, col);
+                }
+            }
+        }
+
+        function placePiece(row, col) {
+            board[row][col] = currentPlayer;
+            moveHistory.push({row, col, player: currentPlayer});
+            playSound('move');
+            
+            drawBoard();
+            
+            if (checkWin(row, col, currentPlayer)) {
+                endGame(currentPlayer);
+                return;
+            }
+            
+            if (moveHistory.length === BOARD_SIZE * BOARD_SIZE) {
+                endGame(0);
+                return;
+            }
+
+            currentPlayer = (currentPlayer === BLACK) ? WHITE : BLACK;
+            updateTurnIndicator();
+
+            const isAiTurn = gameSettings.mode === 'pve' && currentPlayer !== gameSettings.playerColor;
+            if (isAiTurn && isGameActive) {
+                const delay = gameSettings.aiDiff === 'easy' ? 500 : 700;
+                setTimeout(aiMove, delay);
+            }
+        }
+
+        function undoMove() {
+            if (!isGameActive && !document.getElementById('win-overlay').classList.contains('active')) return;
+            
+            if (document.getElementById('win-overlay').classList.contains('active')) {
+                document.getElementById('win-overlay').classList.remove('active');
+                isGameActive = true;
+            }
+            
+            if (moveHistory.length === 0) return;
+
+            if (gameSettings.mode === 'pve') {
+                if (currentPlayer === gameSettings.playerColor) {
+                    if (moveHistory.length >= 2) {
+                        popMove(); popMove();
+                    }
+                } 
+                else {
+                    if (moveHistory.length >= 1) popMove();
+                    currentPlayer = gameSettings.playerColor;
+                }
+
+            } else {
+                if (moveHistory.length >= 1) {
+                    let move = moveHistory.pop();
+                    board[move.row][move.col] = EMPTY;
+                    currentPlayer = move.player;
+                }
+            }
+            
+            updateTurnIndicator();
+            drawBoard();
+        }
+
+        function popMove() {
+            let move = moveHistory.pop();
+            board[move.row][move.col] = EMPTY;
+            currentPlayer = move.player; 
+        }
+
+        /**
+         * 繪圖系統
+         */
+        function drawBoard() {
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const height = canvas.height / (window.devicePixelRatio || 1);
+            
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.fillStyle = "#8b5a2b";
+            ctx.font = "bold 12px 'Roboto Mono'";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            const labelsX = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O'];
+            const labelsY = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15'];
+
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                const pos = padding + i * cellSize;
+                ctx.fillText(labelsX[i], pos, padding * 0.4);
+                ctx.fillText(labelsX[i], pos, height - padding * 0.4);
+                ctx.fillText(labelsY[i], padding * 0.4, pos);
+                ctx.fillText(labelsY[i], width - padding * 0.4, pos);
+            }
+
+            ctx.beginPath();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "#5d4037"; 
+            
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                const pos = padding + i * cellSize;
+                ctx.moveTo(padding, pos);
+                ctx.lineTo(width - padding, pos);
+                ctx.moveTo(pos, padding);
+                ctx.lineTo(pos, height - padding);
+            }
+            ctx.stroke();
+
+            const stars = [3, 7, 11];
+            ctx.fillStyle = "#5d4037";
+            for (let r of stars) {
+                for (let c of stars) {
+                    ctx.beginPath();
+                    ctx.arc(padding + c * cellSize, padding + r * cellSize, 3.5, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+
+            for (let i = 0; i < moveHistory.length; i++) {
+                const move = moveHistory[i];
+                const isLast = (i === moveHistory.length - 1);
+                drawPieceVisual(move.row, move.col, move.player, isLast, i + 1);
+            }
+        }
+
+        function drawPieceVisual(row, col, player, isLast, moveNum) {
+            const x = padding + col * cellSize;
+            const y = padding + row * cellSize;
+            const radius = cellSize * 0.43;
+
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+
+            const gradient = ctx.createRadialGradient(
+                x - radius/3, y - radius/3, radius/10,
+                x, y, radius
+            );
+
+            if (player === BLACK) {
+                gradient.addColorStop(0, "#666");
+                gradient.addColorStop(1, "#0a0a0a");
+            } else {
+                gradient.addColorStop(0, "#fff");
+                gradient.addColorStop(1, "#d1d1d1");
+            }
+
+            ctx.fillStyle = gradient;
+            ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+            ctx.shadowBlur = 6;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+            ctx.fill();
+            
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            if (showMoveNumbers) {
+                ctx.fillStyle = (player === BLACK) ? "white" : "black";
+                ctx.font = "bold " + (radius) + "px 'Roboto Mono'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(moveNum, x, y + 1); 
+                
+                if (isLast) {
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "red";
+                    ctx.beginPath();
+                    ctx.arc(x, y, radius, 0, Math.PI*2);
+                    ctx.stroke();
+                }
+
+            } else {
+                if (isLast) {
+                    ctx.fillStyle = "red";
+                    ctx.beginPath();
+                    ctx.fillRect(x - 3, y - 3, 6, 6);
+                }
+            }
+        }
+
+        function updateTurnIndicator() {
+            const blackDiv = document.getElementById('player-indicator-black');
+            const whiteDiv = document.getElementById('player-indicator-white');
+            
+            if (currentPlayer === BLACK) {
+                blackDiv.className = "flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 bg-white shadow-md border-2 border-blue-400 transform scale-105";
+                whiteDiv.className = "flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent opacity-60";
+            } else {
+                whiteDiv.className = "flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 bg-white shadow-md border-2 border-blue-400 transform scale-105";
+                blackDiv.className = "flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent opacity-60";
+            }
+        }
+
+        function endGame(winner) {
+            isGameActive = false;
+            const overlay = document.getElementById('win-overlay');
+            const title = document.getElementById('win-title');
+            const msg = document.getElementById('win-message');
+            const icon = document.getElementById('win-icon');
+
+            let winText = "";
+            let subText = "";
+            let iconClass = "";
+            let soundType = "";
+
+            if (winner === BLACK) {
+                winText = "黑棋獲勝！";
+                iconClass = "fa-solid fa-trophy text-yellow-500 text-6xl relative z-10 drop-shadow-md";
+                
+                if (gameSettings.mode === 'pve') {
+                    if (gameSettings.playerColor === BLACK) {
+                        subText = "恭喜！你的策略成功了！";
+                        soundType = 'win';
+                    } else {
+                        subText = "AI 技高一籌，下次加油！";
+                        soundType = 'lose';
+                    }
+                } else {
+                    subText = "恭喜黑棋選手！";
+                    soundType = 'win';
+                }
+
+            } else if (winner === WHITE) {
+                winText = "白棋獲勝！";
+                iconClass = "fa-solid fa-trophy text-gray-300 text-6xl relative z-10 drop-shadow-md";
+
+                if (gameSettings.mode === 'pve') {
+                    if (gameSettings.playerColor === WHITE) {
+                        subText = "精彩的後手反擊！";
+                        soundType = 'win';
+                    } else {
+                        subText = "AI 獲勝，再挑戰一次吧？";
+                        soundType = 'lose';
+                    }
+                } else {
+                    subText = "恭喜白棋選手！";
+                    soundType = 'win';
+                }
+
+            } else {
+                winText = "和局";
+                subText = "雙方勢均力敵，難分勝負";
+                iconClass = "fa-solid fa-handshake text-blue-400 text-6xl relative z-10 drop-shadow-md";
+                soundType = 'lose';
+            }
+
+            title.textContent = winText;
+            msg.textContent = subText;
+            icon.className = iconClass;
+
+            playSound(soundType);
+
+            setTimeout(() => {
+                overlay.classList.add('active');
+            }, 300);
+        }
+
+        function checkWin(row, col, player) {
+            const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+            for (let [dr, dc] of directions) {
+                let count = 1;
+                for (let i = 1; i < 5; i++) {
+                    const r = row + dr * i, c = col + dc * i;
+                    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE || board[r][c] !== player) break;
+                    count++;
+                }
+                for (let i = 1; i < 5; i++) {
+                    const r = row - dr * i, c = col - dc * i;
+                    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE || board[r][c] !== player) break;
+                    count++;
+                }
+                if (count >= 5) return true;
+            }
+            return false;
+        }
+
+        /**
+         * AI 系統
+         */
+        const SCORE = {
+            ONE: 10,
+            TWO: 100,
+            THREE: 1000,
+            FOUR: 10000,
+            FIVE: 100000,
+            BLOCKED_ONE: 1,
+            BLOCKED_TWO: 10,
+            BLOCKED_THREE: 100,
+            BLOCKED_FOUR: 1000
+        };
+
+        function aiMove() {
+            if (!isGameActive) return;
+
+            if (currentPlayer === gameSettings.playerColor) return;
+
+            let bestScore = -Infinity;
+            let bestMoves = [];
+
+            let scoreNoise = 0;
+            if (gameSettings.aiDiff === 'easy') scoreNoise = 8000;
+            else if (gameSettings.aiDiff === 'medium') scoreNoise = 100;
+            
+            const aiSide = (gameSettings.playerColor === BLACK) ? WHITE : BLACK;
+            const humanSide = gameSettings.playerColor;
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] === EMPTY) {
+                        const attack = evaluatePoint(r, c, aiSide);
+                        const defense = evaluatePoint(r, c, humanSide);
+                        
+                        let currentScore = 0;
+                        
+                        if (gameSettings.aiDiff === 'hard') {
+                            if (attack >= SCORE.FIVE) currentScore = Infinity; 
+                            else if (defense >= SCORE.FIVE) currentScore = 999999;
+                            else currentScore = attack + defense * 1.1; 
+                        } else {
+                            currentScore = attack + defense;
+                        }
+
+                        if (scoreNoise > 0) {
+                            currentScore += (Math.random() - 0.5) * scoreNoise;
+                        }
+
+                        if (currentScore > bestScore) {
+                            bestScore = currentScore;
+                            bestMoves = [{r, c}];
+                        } else if (Math.abs(currentScore - bestScore) < 1) {
+                            bestMoves.push({r, c});
+                        }
+                    }
+                }
+            }
+
+            if (bestMoves.length > 0) {
+                const move = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                placePiece(move.r, move.c);
+            } else {
+                const center = Math.floor(BOARD_SIZE / 2);
+                if (board[center][center] === EMPTY) placePiece(center, center);
+            }
+        }
+
+        function evaluatePoint(row, col, player) {
+            let totalScore = 0;
+            const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+
+            for (let [dr, dc] of directions) {
+                let count = 1;
+                let blocked = 0;
+
+                // 正向
+                let i = 1;
+                while (true) {
+                    const r = row + dr * i;
+                    const c = col + dc * i;
+                    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
+                        blocked++; break;
+                    }
+                    if (board[r][c] === player) count++;
+                    else if (board[r][c] === EMPTY) break;
+                    else { blocked++; break; }
+                    i++;
+                }
+
+                // 反向
+                i = 1;
+                while (true) {
+                    const r = row - dr * i;
+                    const c = col - dc * i;
+                    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
+                        blocked++; break;
+                    }
+                    if (board[r][c] === player) count++;
+                    else if (board[r][c] === EMPTY) break;
+                    else { blocked++; break; }
+                    i++;
+                }
+
+                if (blocked === 2) {
+                    if (count >= 5) totalScore += SCORE.FIVE;
+                } else {
+                    if (count >= 5) totalScore += SCORE.FIVE;
+                    else if (count === 4) totalScore += (blocked === 0) ? SCORE.FOUR : SCORE.BLOCKED_FOUR;
+                    else if (count === 3) totalScore += (blocked === 0) ? SCORE.THREE : SCORE.BLOCKED_THREE;
+                    else if (count === 2) totalScore += (blocked === 0) ? SCORE.TWO : SCORE.BLOCKED_TWO;
+                    else if (count === 1) totalScore += SCORE.ONE;
+                }
+            }
+            return totalScore;
+        }
+
+        function updateMenuUi() {
+            setAiSettings('diff', 'medium');
+            setAiSettings('color', 'black');
+        }
+
+    </script>
+</body>
+</html>
