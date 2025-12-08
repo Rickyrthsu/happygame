@@ -2,347 +2,672 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>俄羅斯方塊 (AI 演算法修正版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetris Ultimate</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            touch-action: manipulation;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* 強制不出現卷軸 */
+            touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+        
+        /* 玻璃擬態面板 */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        /* 遊戲畫布 */
         .game-canvas {
-            border: 4px solid #334155;
-            border-radius: 8px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+            border: 4px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+            background-color: #1e293b; /* 配合原本深色背景 */
         }
-        .btn-control {
-            transition: all 0.2s ease-in-out;
+
+        /* 模式卡片 */
+        .mode-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .btn-control:active {
-            transform: scale(0.95);
-            background-color: #475569;
+        .mode-card:hover {
+            transform: translateY(-8px);
+            border-color: #818cf8;
+            box-shadow: 0 15px 30px -5px rgba(99, 102, 241, 0.5);
         }
-        /* AI 開關樣式 */
-        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+
+        /* 禁用狀態 (灰底) */
+        .panel-disabled {
+            opacity: 0.2;
+            filter: grayscale(100%);
+            pointer-events: none;
+        }
+
+        .digital-font {
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        /* Home Button Style - 回 index.html */
+        .home-btn-style {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+        .home-btn-style:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(1.1);
+            border-color: #fff;
+        }
+
+        .hidden-display { display: none !important; }
+        
+        /* Switch Toggle */
+        .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4b5563; transition: .4s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #4f46e5; }
-        input:checked + .slider:before { transform: translateX(26px); }
+        input:checked + .slider:before { transform: translateX(22px); }
     </style>
 </head>
-<body class="bg-slate-800 text-white flex flex-col items-center justify-center min-h-screen p-4">
+<body>
 
-    <h1 class="text-4xl font-bold mb-4 tracking-wider">俄羅斯方塊</h1>
+    <div id="mainMenu" class="flex flex-col items-center justify-center w-full max-w-6xl p-4 z-20">
+        <h1 class="text-6xl md:text-7xl font-bold mb-6 tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-cyan-300 filter drop-shadow-lg">TETRIS</h1>
+        <p class="text-slate-300 mb-10 text-xl font-light tracking-wide">CHOOSE YOUR MODE</p>
 
-    <div class="flex flex-col md:flex-row items-center md:items-start justify-center gap-6 w-full max-w-5xl">
-        
-        <!-- 遊戲主體 + 手機按鈕的容器 -->
-        <div class="flex flex-row items-start gap-4">
-            <!-- 遊戲主區域 -->
-            <div class="relative">
-                <canvas id="tetris" class="game-canvas"></canvas>
-                <!-- 遊戲結束畫面 -->
-                <div id="gameOverScreen" class="absolute inset-0 bg-black bg-opacity-75 flex-col items-center justify-center text-center hidden">
-                    <h2 class="text-4xl font-bold text-red-500 mb-4">遊戲結束</h2>
-                    <p class="text-xl mb-6">您的分數: <span id="finalScore">0</span></p>
-                    <button id="restartButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors">重新開始 (R)</button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full px-8">
+            <div onclick="selectMode('CLASSIC')" class="mode-card glass-panel p-8 rounded-3xl cursor-pointer flex flex-col items-center text-center group border-t-4 border-t-blue-500">
+                <div class="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-500 transition-colors">
+                    <i class="fas fa-cube text-2xl text-blue-300 group-hover:text-white"></i>
                 </div>
-                <!-- 暫停畫面 -->
-                <div id="pauseScreen" class="absolute inset-0 bg-black bg-opacity-75 flex-col items-center justify-center text-center hidden">
-                    <h2 class="text-4xl font-bold text-blue-400 mb-4">已暫停</h2>
-                    <p class="text-lg">按下 'P' 鍵繼續</p>
+                <h3 class="text-2xl font-bold mb-2">基本模式</h3>
+                <p class="text-sm text-slate-400">原色風格，經典規則。</p>
+            </div>
+
+            <div onclick="selectMode('SPECIAL')" class="mode-card glass-panel p-8 rounded-3xl cursor-pointer flex flex-col items-center text-center group border-t-4 border-t-purple-500">
+                <div class="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-purple-500 transition-colors">
+                    <i class="fas fa-star text-2xl text-purple-300 group-hover:text-white"></i>
                 </div>
+                <h3 class="text-2xl font-bold mb-2">特殊版本</h3>
+                <p class="text-sm text-slate-400">7-Bag、暫存、踢牆。</p>
             </div>
 
-            <!-- 手機操作按鈕 (移至右側) -->
-            <div id="manualControls" class="flex flex-col items-center justify-around h-full md:hidden" style="height: 600px;">
-                <button id="rotateBtn" class="btn-control bg-slate-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold">↻</button>
-                <button id="leftBtn" class="btn-control bg-slate-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold">←</button>
-                <button id="rightBtn" class="btn-control bg-slate-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold">→</button>
-                <button id="downBtn" class="btn-control bg-slate-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold">↓</button>
-                <button id="hardDropBtn" class="btn-control bg-slate-600 rounded-lg w-full h-16 flex items-center justify-center text-md font-bold">落下</button>
-            </div>
-        </div>
-
-
-        <!-- 遊戲資訊和控制 -->
-        <div class="w-full md:w-48 flex flex-col gap-4">
-            <div class="bg-slate-700 p-4 rounded-lg shadow-lg text-center">
-                <h2 class="text-xl font-bold mb-2">歷史最高分</h2>
-                <p id="highScore" class="text-3xl font-mono">0</p>
-            </div>
-            <div class="bg-slate-700 p-4 rounded-lg shadow-lg text-center">
-                <h2 class="text-xl font-bold mb-2">分數</h2>
-                <p id="score" class="text-3xl font-mono">0</p>
-            </div>
-            <div class="bg-slate-700 p-4 rounded-lg shadow-lg text-center">
-                <h2 class="text-xl font-bold mb-2">下一個</h2>
-                <canvas id="next" width="120" height="120"></canvas>
-            </div>
-            <div class="bg-slate-700 p-4 rounded-lg shadow-lg text-center">
-                <h2 class="text-xl font-bold mb-2">AI 模式</h2>
-                <label class="switch">
-                    <input type="checkbox" id="aiToggle">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <!-- 新增：AI 速度控制 -->
-            <div id="aiSpeedControl" class="bg-slate-700 p-4 rounded-lg shadow-lg text-center hidden">
-                <h2 class="text-xl font-bold mb-2">AI 速度</h2>
-                <input type="range" id="aiSpeedSlider" min="0" max="500" value="100" class="w-full">
-                <span id="aiSpeedLabel" class="text-sm font-mono">100 ms</span>
+            <div onclick="selectMode('SPRINT')" class="mode-card glass-panel p-8 rounded-3xl cursor-pointer flex flex-col items-center text-center group border-t-4 border-t-red-500">
+                <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-red-500 transition-colors">
+                    <i class="fas fa-stopwatch text-2xl text-red-300 group-hover:text-white"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-2">40層競速</h3>
+                <p class="text-sm text-slate-400">最快速度消除 40 行。</p>
+                <div class="mt-4 px-3 py-1 bg-slate-800 rounded-full text-xs font-mono border border-slate-600">
+                    BEST: <span id="menuBestTime" class="text-yellow-400">--:--.--</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- 新增：返回按鈕 -->
-    <a href="./index.html" class="fixed bottom-5 right-5 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors z-10">
-        返回
+    <div id="gameInterface" class="hidden-display flex-col md:flex-row items-start justify-center gap-6 w-full max-h-screen p-4 overflow-hidden">
+        
+        <div class="flex flex-col gap-4 w-full md:w-32 order-2 md:order-1 mt-4 md:mt-0">
+            <button onclick="confirmBackToMenu()" class="glass-panel w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-slate-700 transition mx-auto mb-2 text-slate-300 hover:text-white border border-white/20" title="回到選單">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+
+            <div id="holdPanel" class="glass-panel p-3 rounded-2xl text-center">
+                <h2 class="text-xs text-slate-400 font-bold mb-2 uppercase tracking-widest">Hold</h2>
+                <div class="bg-slate-800/50 rounded-xl p-1 min-h-[80px] flex items-center justify-center">
+                    <canvas id="holdCanvas" width="80" height="80"></canvas>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-2">按一下: C</p>
+            </div>
+
+            <div id="linesPanel" class="glass-panel p-3 rounded-2xl text-center">
+                <h2 class="text-xs text-slate-400 font-bold mb-1 uppercase">Lines</h2>
+                <p id="linesCleared" class="text-3xl digital-font font-bold text-emerald-400">0</p>
+                <p id="linesGoal" class="text-[10px] text-slate-500 mt-1 hidden font-mono">/ 40</p>
+            </div>
+
+            <div id="timerPanel" class="glass-panel p-3 rounded-2xl text-center">
+                <h2 class="text-xs text-slate-400 font-bold mb-1 uppercase">Time</h2>
+                <p id="gameTimer" class="text-xl digital-font font-bold text-yellow-400 tracking-tight">00:00</p>
+            </div>
+        </div>
+
+        <div class="relative order-1 md:order-2">
+            <canvas id="tetris" class="game-canvas"></canvas>
+            
+            <div id="overlayScreen" class="absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center text-center hidden backdrop-blur-md z-10 rounded-lg">
+                <h2 id="overlayTitle" class="text-4xl font-bold text-white mb-4 tracking-widest">PAUSED</h2>
+                <p id="overlaySub" class="text-lg text-slate-300 mb-8 font-light">Press 'P' to Resume</p>
+                <div class="flex gap-4">
+                    <button onclick="restartGame()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-full transition shadow-lg">重來</button>
+                    <button onclick="backToMenu()" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-6 rounded-full transition shadow-lg">選單</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-4 w-full md:w-40 order-3 md:order-3 mt-4 md:mt-0">
+            <div class="glass-panel p-4 rounded-2xl text-center">
+                <h2 class="text-xs text-slate-400 font-bold mb-2 uppercase tracking-widest">Next</h2>
+                <div class="bg-slate-800/50 rounded-xl p-1 min-h-[80px] flex items-center justify-center">
+                    <canvas id="nextCanvas" width="80" height="80"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-panel p-4 rounded-2xl text-center">
+                <h2 class="text-xs text-slate-400 font-bold mb-1 uppercase">Score</h2>
+                <p id="score" class="text-2xl digital-font font-bold text-white mb-1">0</p>
+                <div class="border-t border-white/10 pt-2 mt-1">
+                    <p class="text-[10px] text-slate-400 uppercase">Best</p>
+                    <p id="highScore" class="text-base digital-font text-indigo-300">0</p>
+                </div>
+            </div>
+
+            <div id="aiControlPanel" class="glass-panel p-4 rounded-2xl text-center">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-purple-300">AI 託管</span>
+                    <label class="switch scale-75 origin-right">
+                        <input type="checkbox" id="aiToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="aiSpeedBox" class="hidden">
+                    <input type="range" id="aiSpeedSlider" min="0" max="500" value="100" class="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer">
+                    <p id="aiSpeedLabel" class="text-[10px] font-mono mt-2 text-slate-400">100 ms</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <a href="./index.html" class="home-btn-style fixed bottom-6 right-6 group text-white border-2 border-slate-400/30 hover:border-white">
+        <i class="fas fa-home text-2xl group-hover:scale-110 transition-transform"></i>
     </a>
 
     <script>
-        // --- 遊戲基本設定 ---
+        // --- 核心變數 ---
         const canvas = document.getElementById('tetris');
         const context = canvas.getContext('2d');
-        const nextCanvas = document.getElementById('next');
-        const nextContext = nextCanvas.getContext('2d');
-        const scoreElement = document.getElementById('score');
-        const highScoreElement = document.getElementById('highScore');
-        const gameOverScreen = document.getElementById('gameOverScreen');
-        const finalScoreElement = document.getElementById('finalScore');
-        const restartButton = document.getElementById('restartButton');
+        const nextCanvas = document.getElementById('nextCanvas');
+        const nextCtx = nextCanvas.getContext('2d');
+        const holdCanvas = document.getElementById('holdCanvas');
+        const holdCtx = holdCanvas.getContext('2d');
+        
+        // UI Elements
+        const mainMenu = document.getElementById('mainMenu');
+        const gameInterface = document.getElementById('gameInterface');
+        const overlayScreen = document.getElementById('overlayScreen');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlaySub = document.getElementById('overlaySub');
+        const holdPanel = document.getElementById('holdPanel');
+        const timerPanel = document.getElementById('timerPanel');
+        
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const linesEl = document.getElementById('linesCleared');
+        const linesGoalEl = document.getElementById('linesGoal');
+        const timerEl = document.getElementById('gameTimer');
         const aiToggle = document.getElementById('aiToggle');
-        const manualControls = document.getElementById('manualControls');
-        const pauseScreen = document.getElementById('pauseScreen');
-        const aiSpeedControl = document.getElementById('aiSpeedControl');
+        const aiSpeedBox = document.getElementById('aiSpeedBox');
         const aiSpeedSlider = document.getElementById('aiSpeedSlider');
-        const aiSpeedLabel = document.getElementById('aiSpeedLabel');
+        const menuBestTime = document.getElementById('menuBestTime');
 
+        // --- 修正1: 尺寸與版面 ---
         const COLS = 10;
         const ROWS = 20;
-        const BLOCK_SIZE = 30;
-        const NEXT_BLOCK_SIZE = 20;
+        const BLOCK_SIZE = 32; // 改為 32px，在清晰度與版面空間取得平衡
+        
+        // --- 修正2: 顏色還原 (您原始的色票) ---
+        // 這些是移動中的方塊顏色 (扁平風格)
+        const ORIGINAL_COLORS = [ 
+            null, 
+            '#C792EA', // T (Purple)
+            '#FFCB6B', // O (Yellow)
+            '#F78C6C', // L (Orange)
+            '#82AAFF', // J (Blue)
+            '#89DDFF', // I (Cyan)
+            '#C3E88D', // S (Green)
+            '#FF5370'  // Z (Red)
+        ];
+        
+        // 鎖定後的顏色 (維持紫色設定)
+        const LOCKED_COLOR = '#7c3aed'; 
 
+        const SHAPES = [ [], 
+            [[0, 1, 0], [1, 1, 1], [0, 0, 0]], 
+            [[1, 1], [1, 1]],                 
+            [[0, 0, 1], [1, 1, 1], [0, 0, 0]], 
+            [[1, 0, 0], [1, 1, 1], [0, 0, 0]], 
+            [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], 
+            [[0, 1, 1], [1, 1, 0], [0, 0, 0]], 
+            [[1, 1, 0], [0, 1, 1], [0, 0, 0]]  
+        ];
+
+        let board;
+        let player = { pos: {x:0, y:0}, matrix: null, typeId: 0 };
+        let nextPiece = null;
+        let holdPiece = null;
+        let canHold = true;
+        let gameMode = 'CLASSIC'; 
+        let score = 0;
+        let linesCleared = 0;
+        let dropCounter = 0;
+        let dropInterval = 1000;
+        let lastTime = 0;
+        let isPaused = false;
+        let isGameOver = false;
+        let isAiActive = false;
+        
+        let bag = []; 
+        let startTime = 0;
+        let aiMoveDelay = 100;
+        let lastAiMoveTime = 0;
+
+        // Init Scaling
         canvas.width = COLS * BLOCK_SIZE;
         canvas.height = ROWS * BLOCK_SIZE;
         context.scale(BLOCK_SIZE, BLOCK_SIZE);
-        nextContext.scale(NEXT_BLOCK_SIZE, NEXT_BLOCK_SIZE);
+        nextCtx.scale(20, 20);
+        holdCtx.scale(20, 20);
 
-        const COLORS = [ null, '#C792EA', '#FFCB6B', '#F78C6C', '#82AAFF', '#89DDFF', '#C3E88D', '#FF5370' ];
-        const SHAPES = [ [], [[0, 1, 0], [1, 1, 1], [0, 0, 0]], [[1, 1], [1, 1]], [[0, 0, 1], [1, 1, 1], [0, 0, 0]], [[1, 0, 0], [1, 1, 1], [0, 0, 0]], [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], [[0, 1, 1], [1, 1, 0], [0, 0, 0]], [[1, 1, 0], [0, 1, 1], [0, 0, 0]] ];
-
-        let board, player, nextPiece, score, highScore, dropCounter, dropInterval, lastTime, isGameOver;
-        let isAiActive = false;
-        let isPaused = false;
-
-        // --- AI 相關設定 ---
-        let AI_MOVE_DELAY = 100;
-        let lastAiMoveTime = 0;
-        
-        const AI_WEIGHTS = {
-            clearedLines: 500,
-            tetrisBonus: 2000,
-            aggregateHeight: -10,
-            holes: -700,
-            bumpiness: -50
-        };
-
-        // --- 核心遊戲邏輯 ---
-        function createBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(0)); }
-        function drawBlock(ctx, x, y, color, size = 1) { ctx.fillStyle = color; ctx.fillRect(x, y, size, size); ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 0.1; ctx.strokeRect(x, y, size, size); }
-        
-        /**
-         * 新增：繪製預判落點的鬼影方塊
-         */
-        function drawGhostPiece() {
-            if (isGameOver || isPaused || !player.matrix) return;
-
-            // 複製當前方塊來計算落點
-            const ghostPlayer = JSON.parse(JSON.stringify(player));
-
-            // 持續下移直到碰撞
-            while (!collide(ghostPlayer, board)) {
-                ghostPlayer.pos.y++;
+        function loadStats() {
+            highScoreEl.innerText = localStorage.getItem('tetrisHighScore') || 0;
+            const bestTime = localStorage.getItem('tetrisSprintBest');
+            if (bestTime) {
+                menuBestTime.innerText = formatTime(parseInt(bestTime));
             }
-            // 移回碰撞前的最後一個有效位置
-            ghostPlayer.pos.y--;
+        }
+        loadStats();
 
-            // 繪製半透明的鬼影
-            const color = COLORS[ghostPlayer.typeId];
-            context.globalAlpha = 0.3; // 設定透明度
-            ghostPlayer.matrix.forEach((row, y) => {
+        // --- 模式選擇 ---
+        window.selectMode = function(mode) {
+            gameMode = mode;
+            mainMenu.classList.add('hidden-display');
+            gameInterface.classList.remove('hidden-display');
+            gameInterface.classList.add('flex');
+            
+            holdPanel.classList.remove('panel-disabled');
+            timerPanel.classList.remove('panel-disabled');
+            linesGoalEl.classList.add('hidden');
+            document.getElementById('aiControlPanel').classList.remove('panel-disabled');
+
+            if (mode === 'CLASSIC') {
+                holdPanel.classList.add('panel-disabled');
+                timerPanel.classList.add('panel-disabled');
+                document.getElementById('aiControlPanel').classList.remove('hidden');
+            } else if (mode === 'SPECIAL') {
+                timerPanel.classList.add('panel-disabled');
+                document.getElementById('aiControlPanel').classList.remove('hidden');
+            } else if (mode === 'SPRINT') {
+                linesGoalEl.classList.remove('hidden');
+                document.getElementById('aiControlPanel').classList.add('panel-disabled'); 
+                isAiActive = false;
+                aiToggle.checked = false;
+                aiSpeedBox.classList.add('hidden');
+            }
+            startGame();
+        }
+
+        window.confirmBackToMenu = function() {
+            if (!isGameOver) {
+                isPaused = true;
+                overlayScreen.classList.remove('hidden');
+                overlayScreen.classList.add('flex');
+                overlayTitle.innerText = "MENU?";
+                overlaySub.innerText = "Exit current game?";
+            } else {
+                backToMenu();
+            }
+        }
+
+        window.backToMenu = function() {
+            isGameOver = true;
+            mainMenu.classList.remove('hidden-display');
+            gameInterface.classList.add('hidden-display');
+            gameInterface.classList.remove('flex');
+            overlayScreen.classList.add('hidden');
+            loadStats();
+        }
+
+        // --- 繪圖邏輯 (修改：使用原始色票 + 移除光澤) ---
+
+        function drawGrid() {
+            context.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            context.lineWidth = 0.05;
+            for (let x = 1; x < COLS; x++) {
+                context.beginPath(); context.moveTo(x, 0); context.lineTo(x, ROWS); context.stroke();
+            }
+            for (let y = 1; y < ROWS; y++) {
+                context.beginPath(); context.moveTo(0, y); context.lineTo(COLS, y); context.stroke();
+            }
+        }
+
+        function drawBlock(ctx, x, y, color, alpha = 1) {
+            ctx.fillStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.fillRect(x, y, 1, 1);
+            
+            // 扁平風格，僅保留微弱邊框
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)'; 
+            ctx.lineWidth = 0.05;
+            ctx.strokeRect(x, y, 1, 1);
+            
+            // 移除了 gloss (立體光澤) 程式碼
+            ctx.globalAlpha = 1;
+        }
+
+        function draw() {
+            context.fillStyle = '#1e293b'; // 原本的深色背景
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawGrid();
+
+            // 鎖定的方塊 (紫色)
+            board.forEach((row, y) => {
                 row.forEach((value, x) => {
                     if (value !== 0) {
-                        // 只畫邊框，更有虛線框的感覺
-                        context.fillStyle = color;
-                        context.fillRect(ghostPlayer.pos.x + x, ghostPlayer.pos.y + y, 1, 1);
+                        drawBlock(context, x, y, LOCKED_COLOR);
                     }
                 });
             });
-            context.globalAlpha = 1.0; // 重置透明度
+
+            // 鬼影 (半透明紫色)
+            if (!isGameOver && !isPaused && gameMode !== 'CLASSIC') {
+                const ghost = JSON.parse(JSON.stringify(player));
+                while(!collide(ghost, board)) ghost.pos.y++;
+                ghost.pos.y--;
+                ghost.matrix.forEach((row, y) => {
+                    row.forEach((value, x) => {
+                        if (value !== 0) drawBlock(context, x + ghost.pos.x, y + ghost.pos.y, LOCKED_COLOR, 0.2);
+                    });
+                });
+            }
+
+            // 玩家方塊 (使用原始艷麗色票)
+            if (player.matrix) {
+                player.matrix.forEach((row, y) => {
+                    row.forEach((value, x) => {
+                        if (value !== 0) {
+                            // 使用 ORIGINAL_COLORS
+                            drawBlock(context, x + player.pos.x, y + player.pos.y, ORIGINAL_COLORS[player.typeId]);
+                        }
+                    });
+                });
+            }
         }
 
-        function draw() { 
-            context.fillStyle = '#1e293b'; 
-            context.fillRect(0, 0, canvas.width, canvas.height); 
-            
-            context.strokeStyle = 'rgba(128, 128, 128, 0.2)'; 
-            context.lineWidth = 0.05; 
-            for (let x = 1; x < COLS; x++) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, ROWS); context.stroke(); } 
-            for (let y = 1; y < ROWS; y++) { context.beginPath(); context.moveTo(0, y); context.lineTo(COLS, y); context.stroke(); } 
-            
-            board.forEach((row, y) => row.forEach((value, x) => { if (value !== 0) drawBlock(context, x, y, COLORS[value]); })); 
-            
-            // 在繪製活動方塊前，先繪製鬼影
-            drawGhostPiece();
-
-            if (player.matrix) { 
-                player.matrix.forEach((row, y) => row.forEach((value, x) => { 
-                    if (value !== 0) drawBlock(context, player.pos.x + x, player.pos.y + y, COLORS[player.typeId]); 
-                })); 
-            } 
-        }
-
-        function drawNext() { nextContext.fillStyle = '#1e293b'; nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height); if (nextPiece && nextPiece.matrix) { const m = nextPiece.matrix; const ox = (6 - m[0].length) / 2; const oy = (6 - m.length) / 2; m.forEach((row, y) => row.forEach((value, x) => { if (value !== 0) drawBlock(nextContext, x + ox, y + oy, COLORS[nextPiece.typeId], 1); })); } }
-        function collide(player, board) { const [m, o] = [player.matrix, player.pos]; for (let y = 0; y < m.length; ++y) { for (let x = 0; x < m[y].length; ++x) { if (m[y][x] !== 0 && (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) return true; } } return false; }
-        function merge(player, board) { player.matrix.forEach((row, y) => row.forEach((value, x) => { if (value !== 0) board[y + player.pos.y][x + player.pos.x] = value; })); }
-        function rotate(matrix, dir) { for (let y = 0; y < matrix.length; ++y) { for (let x = 0; x < y; ++x) { [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]]; } } if (dir > 0) matrix.forEach(row => row.reverse()); else matrix.reverse(); }
-        function playerDrop() { if (isPaused) return; player.pos.y++; if (collide(player, board)) { player.pos.y--; merge(player, board); sweepLines(); playerReset(); } dropCounter = 0; }
-        function playerHardDrop() { if (isPaused) return; while (!collide(player, board)) { player.pos.y++; } player.pos.y--; merge(player, board); sweepLines(); playerReset(); dropCounter = 0; }
-        function playerMove(dir) { if (isGameOver || isAiActive || isPaused) return; player.pos.x += dir; if (collide(player, board)) player.pos.x -= dir; }
-        function playerRotate(dir) { if (isGameOver || isAiActive || isPaused) return; const pos = player.pos.x; let offset = 1; rotate(player.matrix, dir); while (collide(player, board)) { player.pos.x += offset; offset = -(offset + (offset > 0 ? 1 : -1)); if (offset > player.matrix[0].length) { rotate(player.matrix, -dir); player.pos.x = pos; return; } } }
-        function createPiece(type) { let matrix, typeId; if (type === 'T') { matrix = SHAPES[1]; typeId = 1; } else if (type === 'O') { matrix = SHAPES[2]; typeId = 2; } else if (type === 'L') { matrix = SHAPES[3]; typeId = 3; } else if (type === 'J') { matrix = SHAPES[4]; typeId = 4; } else if (type === 'I') { matrix = SHAPES[5]; typeId = 5; } else if (type === 'S') { matrix = SHAPES[6]; typeId = 6; } else if (type === 'Z') { matrix = SHAPES[7]; typeId = 7; } return { pos: { x: 0, y: 0 }, matrix: matrix, typeId: typeId }; }
-        function updateHighScore() { if (score > highScore) { highScore = score; localStorage.setItem('tetrisHighScore', highScore); highScoreElement.innerText = highScore; } }
-        function handleGameOver() { isGameOver = true; updateHighScore(); gameOverScreen.classList.remove('hidden'); gameOverScreen.classList.add('flex'); finalScoreElement.innerText = score; }
-        function playerReset() { const pieces = 'TJLOISZ'; player = nextPiece || createPiece(pieces[pieces.length * Math.random() | 0]); nextPiece = createPiece(pieces[pieces.length * Math.random() | 0]); player.pos.y = 0; player.pos.x = (COLS / 2 | 0) - (player.matrix[0].length / 2 | 0); if (collide(player, board)) { handleGameOver(); } drawNext(); }
-        function sweepLines() { let clearedLines = 0; outer: for (let y = board.length - 1; y > 0; --y) { for (let x = 0; x < board[y].length; ++x) { if (board[y][x] === 0) continue outer; } const row = board.splice(y, 1)[0].fill(0); board.unshift(row); y++; clearedLines++; } if (clearedLines > 0) { const lineScores = [0, 40, 100, 300, 1200]; score += lineScores[clearedLines]; scoreElement.innerText = score; } }
-
-        // --- AI 核心演算法 (已還原) ---
-        function evaluateBoard(board) {
-            let score = 0;
-            const columnHeights = Array(COLS).fill(0);
-            let holes = 0;
-            let clearedLines = 0;
-
-            for (let y = 0; y < ROWS; y++) {
-                let isLineFull = true;
-                for (let x = 0; x < COLS; x++) {
-                    if (board[y][x] === 0) {
-                        isLineFull = false;
-                        if (y > 0) {
-                            let blockAbove = false;
-                            for(let k = y - 1; k >= 0; k--) {
-                                if (board[k][x] !== 0) {
-                                    blockAbove = true;
-                                    break;
-                                }
-                            }
-                            if (blockAbove) holes++;
-                        }
-                    } else {
-                        if (columnHeights[x] === 0) {
-                            columnHeights[x] = ROWS - y;
-                        }
+        function drawMiniMatrix(matrix, ctx, canvasEl, typeId) {
+            ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+            if (!matrix) return;
+            const ox = (4 - matrix[0].length) / 2;
+            const oy = (4 - matrix.length) / 2;
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        drawBlock(ctx, x + ox, y + oy, ORIGINAL_COLORS[typeId]);
                     }
-                }
-                if (isLineFull) {
-                    clearedLines++;
-                }
-            }
+                });
+            });
+        }
 
-            const aggregateHeight = columnHeights.reduce((a, b) => a + b, 0);
-            let bumpiness = 0;
-            for (let i = 0; i < COLS - 1; i++) {
-                bumpiness += Math.abs(columnHeights[i] - columnHeights[i+1]);
-            }
+        function drawStats() {
+            drawMiniMatrix(nextPiece?.matrix, nextCtx, nextCanvas, nextPiece?.typeId);
+            drawMiniMatrix(holdPiece?.matrix, holdCtx, holdCanvas, holdPiece?.typeId);
+            scoreEl.innerText = score;
+            linesEl.innerText = linesCleared;
+        }
 
-            score += clearedLines * AI_WEIGHTS.clearedLines;
-            if (clearedLines === 4) {
-                score += AI_WEIGHTS.tetrisBonus;
+        // --- 邏輯函數 (保持不變) ---
+        function createBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(0)); }
+        function refillBag() {
+            const pieces = 'TJLOISZ'.split('');
+            for (let i = pieces.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
             }
+            bag = pieces;
+        }
+        function getPiece() {
+            if (gameMode === 'SPECIAL' || gameMode === 'SPRINT') {
+                if (bag.length === 0) refillBag();
+                const type = bag.pop();
+                return createPiece(type);
+            } else {
+                const pieces = 'TJLOISZ';
+                return createPiece(pieces[pieces.length * Math.random() | 0]);
+            }
+        }
+        function createPiece(type) {
+            let matrix, typeId;
+            switch(type) {
+                case 'T': matrix = SHAPES[1]; typeId = 1; break;
+                case 'O': matrix = SHAPES[2]; typeId = 2; break;
+                case 'L': matrix = SHAPES[3]; typeId = 3; break;
+                case 'J': matrix = SHAPES[4]; typeId = 4; break;
+                case 'I': matrix = SHAPES[5]; typeId = 5; break;
+                case 'S': matrix = SHAPES[6]; typeId = 6; break;
+                case 'Z': matrix = SHAPES[7]; typeId = 7; break;
+            }
+            return { pos: { x: 0, y: 0 }, matrix: matrix, typeId: typeId, typeChar: type };
+        }
+        function playerReset() {
+            player = nextPiece || getPiece();
+            nextPiece = getPiece();
+            player.pos.y = 0;
+            player.pos.x = (COLS / 2 | 0) - (player.matrix[0].length / 2 | 0);
+            canHold = true;
+            if (collide(player, board)) gameOver();
+            drawStats();
+        }
+        function holdPieceAction() {
+            if (!canHold || isGameOver || isPaused || gameMode === 'CLASSIC') return;
+            if (holdPiece === null) {
+                holdPiece = player; playerReset();
+            } else {
+                const temp = player; player = holdPiece; holdPiece = temp;
+                player.pos.y = 0; player.pos.x = (COLS / 2 | 0) - (player.matrix[0].length / 2 | 0);
+            }
+            holdPiece = createPiece(holdPiece.typeChar);
+            canHold = false; drawStats();
+        }
+        function collide(p, b) {
+            const m = p.matrix; const o = p.pos;
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 && (b[y + o.y] && b[y + o.y][x + o.x]) !== 0) return true;
+                }
+            }
+            return false;
+        }
+        function merge(p, b) {
+            p.matrix.forEach((row, y) => {
+                row.forEach((value, x) => { if (value !== 0) b[y + p.pos.y][x + p.pos.x] = value; });
+            });
+        }
+        function rotate(matrix, dir) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+            }
+            if (dir > 0) matrix.forEach(row => row.reverse()); else matrix.reverse();
+        }
+        function playerRotate(dir) {
+            const pos = player.pos.x; let offset = 1; rotate(player.matrix, dir);
+            while (collide(player, board)) {
+                player.pos.x += offset; offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) { rotate(player.matrix, -dir); player.pos.x = pos; return; }
+            }
+        }
+        function playerMove(dir) { player.pos.x += dir; if (collide(player, board)) player.pos.x -= dir; }
+        function playerDrop() {
+            player.pos.y++;
+            if (collide(player, board)) { player.pos.y--; merge(player, board); sweepLines(); playerReset(); }
+            dropCounter = 0;
+        }
+        function playerHardDrop() {
+            while (!collide(player, board)) player.pos.y++;
+            player.pos.y--; merge(player, board); sweepLines(); playerReset(); dropCounter = 0;
+        }
+        function sweepLines() {
+            let rowCount = 0;
+            outer: for (let y = board.length - 1; y > 0; --y) {
+                for (let x = 0; x < board[y].length; ++x) { if (board[y][x] === 0) continue outer; }
+                const row = board.splice(y, 1)[0].fill(0); board.unshift(row); ++y; rowCount++;
+            }
+            if (rowCount > 0) {
+                linesCleared += rowCount;
+                const points = [0, 40, 100, 300, 1200];
+                score += points[rowCount] * (Math.floor(linesCleared/10) + 1);
+                if (gameMode !== 'SPRINT') dropInterval = Math.max(100, 1000 - (linesCleared * 10));
+                if (gameMode === 'SPRINT' && linesCleared >= 40) gameWin();
+            }
+        }
+
+        // --- AI (保持不變) ---
+        const AI_WEIGHTS = { clearedLines: 500, tetrisBonus: 2000, aggregateHeight: -10, holes: -700, bumpiness: -50 };
+        function evaluateBoard(testBoard) {
+            let holes = 0, aggregateHeight = 0, bumpiness = 0, cleared = 0;
+            let heights = new Array(COLS).fill(0);
+            for (let y = 0; y < ROWS; y++) {
+                let full = true;
+                for (let x = 0; x < COLS; x++) {
+                    if (testBoard[y][x] === 0) full = false;
+                    else if (heights[x] === 0) heights[x] = ROWS - y;
+                }
+                if (full) cleared++;
+            }
+            for(let x=0; x<COLS; x++) {
+                aggregateHeight += heights[x];
+                if(x < COLS-1) bumpiness += Math.abs(heights[x] - heights[x+1]);
+                for(let y=ROWS-heights[x]; y<ROWS; y++) if(testBoard[y][x] === 0) holes++;
+            }
+            let score = 0;
+            score += cleared * AI_WEIGHTS.clearedLines;
+            if(cleared === 4) score += AI_WEIGHTS.tetrisBonus;
             score += aggregateHeight * AI_WEIGHTS.aggregateHeight;
             score += holes * AI_WEIGHTS.holes;
             score += bumpiness * AI_WEIGHTS.bumpiness;
-            
             return score;
         }
-
-        function findBestMove() {
-            let bestScore = -Infinity;
-            let bestMove = null;
-            const originalPlayer = JSON.parse(JSON.stringify(player));
-
-            for (let rotation = 0; rotation < 4; rotation++) {
-                let tempPlayerForRotation = JSON.parse(JSON.stringify(originalPlayer));
-                for(let i = 0; i < rotation; i++) rotate(tempPlayerForRotation.matrix, 1);
-                if (rotation > 0 && JSON.stringify(tempPlayerForRotation.matrix) === JSON.stringify(originalPlayer.matrix)) continue;
-
+        function aiThink() {
+            if (!player.matrix) return;
+            let bestScore = -Infinity, bestMove = null;
+            let original = JSON.parse(JSON.stringify(player));
+            for (let r = 0; r < 4; r++) {
+                let p = JSON.parse(JSON.stringify(original));
+                for(let i=0; i<r; i++) rotate(p.matrix, 1);
                 for (let x = -2; x < COLS; x++) {
+                    p.pos.x = x; p.pos.y = original.pos.y;
+                    if(collide(p, board)) continue;
                     let tempBoard = JSON.parse(JSON.stringify(board));
-                    let tempPlayer = JSON.parse(JSON.stringify(tempPlayerForRotation));
-                    tempPlayer.pos.x = x;
-
-                    if (collide(tempPlayer, tempBoard)) continue;
-
-                    while (!collide(tempPlayer, tempBoard)) {
-                        tempPlayer.pos.y++;
-                    }
-                    tempPlayer.pos.y--;
-
-                    if (tempPlayer.pos.y < 0) continue;
-
-                    merge(tempPlayer, tempBoard);
-                    
-                    const score = evaluateBoard(tempBoard);
-
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMove = { rotation: rotation, x: x };
-                    }
+                    let tempP = JSON.parse(JSON.stringify(p));
+                    while(!collide(tempP, tempBoard)) tempP.pos.y++;
+                    tempP.pos.y--;
+                    merge(tempP, tempBoard);
+                    let score = evaluateBoard(tempBoard);
+                    if (score > bestScore) { bestScore = score; bestMove = { r: r, x: x }; }
                 }
             }
-            return bestMove;
+            if (bestMove) {
+                for(let i=0; i<bestMove.r; i++) rotate(player.matrix, 1);
+                player.pos.x = bestMove.x; playerHardDrop();
+            }
         }
 
-
-        function executeAiMove() { const bestMove = findBestMove(); if (bestMove) { for (let i = 0; i < bestMove.rotation; i++) { rotate(player.matrix, 1); } player.pos.x = bestMove.x; playerHardDrop(); } else { playerHardDrop(); } }
-        function togglePause() { if (isGameOver) return; isPaused = !isPaused; if (isPaused) { pauseScreen.classList.remove('hidden'); pauseScreen.classList.add('flex'); } else { pauseScreen.classList.add('hidden'); pauseScreen.classList.remove('flex'); lastTime = performance.now(); } }
-        function update(time = 0) { if (isGameOver) return; if (!isPaused) { const deltaTime = time - lastTime; lastTime = time; if (isAiActive) { if (time - lastAiMoveTime > AI_MOVE_DELAY) { executeAiMove(); lastAiMoveTime = time; } } else { dropCounter += deltaTime; if (dropCounter > dropInterval) { playerDrop(); } } draw(); } requestAnimationFrame(update); }
-        function startGame() { board = createBoard(); score = 0; highScore = localStorage.getItem('tetrisHighScore') || 0; scoreElement.innerText = score; highScoreElement.innerText = highScore; dropInterval = 1000; isGameOver = false; isPaused = false; lastTime = 0; dropCounter = 0; lastAiMoveTime = 0; playerReset(); if (!isPaused) { update(); } }
-        function restartGame() { if (isGameOver) { gameOverScreen.classList.add('hidden'); gameOverScreen.classList.remove('flex'); } else { updateHighScore(); } isGameOver = true; pauseScreen.classList.add('hidden'); pauseScreen.classList.remove('flex'); setTimeout(startGame, 0); }
-        
-        // --- 事件監聽 ---
-        document.addEventListener('keydown', event => { const key = event.key.toLowerCase(); if (key === 'p') { togglePause(); return; } if (key === 'r') { restartGame(); return; } if (isGameOver || isAiActive || isPaused) return; if (event.key === 'ArrowLeft') playerMove(-1); else if (event.key === 'ArrowRight') playerMove(1); else if (event.key === 'ArrowDown') playerDrop(); else if (event.key === 'ArrowUp') playerRotate(1); else if (event.code === 'Space' || event.key === ' ') { event.preventDefault(); playerHardDrop(); } });
-        restartButton.addEventListener('click', restartGame);
-        
-        aiToggle.addEventListener('change', (e) => {
-            isAiActive = e.target.checked;
-            manualControls.style.display = isAiActive ? 'none' : 'flex';
-            if (isAiActive) {
-                aiSpeedControl.classList.remove('hidden');
-            } else {
-                aiSpeedControl.classList.add('hidden');
-                dropCounter = 0;
-                lastTime = performance.now();
+        function formatTime(ms) {
+            const minutes = Math.floor(ms / 60000);
+            const seconds = Math.floor((ms % 60000) / 1000);
+            const centis = Math.floor((ms % 1000) / 10);
+            return `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}.${centis.toString().padStart(2,'0')}`;
+        }
+        function update(time = 0) {
+            if (isGameOver || isPaused) return;
+            const deltaTime = time - lastTime; lastTime = time;
+            if (gameMode === 'SPRINT') {
+                const elapsed = performance.now() - startTime;
+                timerEl.innerText = formatTime(elapsed);
             }
+            if (isAiActive && gameMode !== 'SPRINT') {
+                if (time - lastAiMoveTime > aiMoveDelay) { aiThink(); lastAiMoveTime = time; }
+            } else {
+                dropCounter += deltaTime;
+                if (dropCounter > dropInterval) playerDrop();
+            }
+            draw(); requestAnimationFrame(update);
+        }
+        function startGame() {
+            board = createBoard(); score = 0; linesCleared = 0; dropInterval = 1000;
+            isGameOver = false; isPaused = false; bag = []; holdPiece = null; startTime = performance.now();
+            overlayScreen.classList.add('hidden');
+            if (gameMode === 'SPRINT') timerEl.innerText = "00:00.00";
+            nextPiece = getPiece(); playerReset(); update();
+        }
+
+        window.restartGame = function() { startGame(); }
+        function gameOver() {
+            isGameOver = true; overlayScreen.classList.remove('hidden'); overlayScreen.classList.add('flex');
+            overlayTitle.innerText = "GAME OVER"; overlaySub.innerText = `Final Score: ${score}`;
+            const saved = localStorage.getItem('tetrisHighScore') || 0;
+            if (score > saved) { localStorage.setItem('tetrisHighScore', score); highScoreEl.innerText = score; }
+        }
+        function gameWin() {
+            isGameOver = true; overlayScreen.classList.remove('hidden'); overlayScreen.classList.add('flex');
+            overlayTitle.innerText = "YOU WIN!"; overlaySub.innerText = `Time: ${formatTime(performance.now() - startTime)}`;
+            const savedTime = localStorage.getItem('tetrisSprintBest');
+            if (!savedTime || (performance.now() - startTime) < parseInt(savedTime)) { localStorage.setItem('tetrisSprintBest', performance.now() - startTime); }
+        }
+
+        document.addEventListener('keydown', event => {
+            const key = event.key;
+            if (key.toLowerCase() === 'p') { 
+                if(!isGameOver && gameInterface.classList.contains('flex')) {
+                    isPaused = !isPaused;
+                    if(isPaused) {
+                         overlayScreen.classList.remove('hidden'); overlayScreen.classList.add('flex');
+                         overlayTitle.innerText = "PAUSED"; overlaySub.innerText = "Press P to Resume";
+                    } else {
+                         overlayScreen.classList.add('hidden'); lastTime = performance.now(); requestAnimationFrame(update);
+                    }
+                }
+                return; 
+            }
+            if (isGameOver || isPaused || isAiActive) return;
+            if (key === 'ArrowLeft') playerMove(-1);
+            else if (key === 'ArrowRight') playerMove(1);
+            else if (key === 'ArrowDown') playerDrop();
+            else if (key === 'ArrowUp') playerRotate(1);
+            else if (key === ' ' || event.code === 'Space') { event.preventDefault(); playerHardDrop(); }
+            else if (key.toLowerCase() === 'c' || key === 'Shift') { holdPieceAction(); }
         });
 
-        // 新增：AI 速度滑桿事件
+        aiToggle.addEventListener('change', (e) => {
+            if(gameMode === 'SPRINT') { e.target.checked = false; return; }
+            isAiActive = e.target.checked;
+            aiSpeedBox.classList.toggle('hidden', !isAiActive);
+            if(isAiActive) { lastTime = performance.now(); requestAnimationFrame(update); }
+        });
         aiSpeedSlider.addEventListener('input', (e) => {
-            AI_MOVE_DELAY = parseInt(e.target.value);
-            aiSpeedLabel.innerText = `${AI_MOVE_DELAY} ms`;
+            aiMoveDelay = parseInt(e.target.value);
+            document.getElementById('aiSpeedLabel').innerText = `${aiMoveDelay} ms`;
         });
-
-        document.getElementById('leftBtn')?.addEventListener('click', () => playerMove(-1));
-        document.getElementById('rightBtn')?.addEventListener('click', () => playerMove(1));
-        document.getElementById('downBtn')?.addEventListener('click', () => playerDrop());
-        document.getElementById('rotateBtn')?.addEventListener('click', () => playerRotate(1));
-        document.getElementById('hardDropBtn')?.addEventListener('click', () => playerHardDrop());
-        
-        // 初始啟動
-        startGame();
     </script>
 </body>
 </html>

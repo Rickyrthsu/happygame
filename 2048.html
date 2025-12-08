@@ -2,501 +2,621 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2048 遊戲 (AI 宗師版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048 AI Master Version</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
         body {
-            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            font-family: 'Inter', sans-serif;
             touch-action: none;
+            background-color: #faf8ef;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
         }
-        .tile {
-            transition: transform 0.1s ease-in-out, background-color 0.1s ease-in-out, top 0.1s ease-in-out, left 0.1s ease-in-out;
+
+        .game-container {
+            width: 460px; /* 340px -> 460px (~135%) */
+            margin: 0 auto;
         }
-        .tile-new {
-            animation: appear 0.2s ease-in-out;
+
+        /* 棋盤背景 - 使用 Grid 佈局 */
+        .grid-container {
+            position: relative;
+            background-color: #bbada0;
+            border-radius: 8px; /* 稍微大一點的圓角 */
+            width: 460px;  /* 放大 */
+            height: 460px; /* 放大 */
+            padding: 20px; /* 15px -> 20px */
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 20px;     /* 15px -> 20px */
+            box-sizing: border-box;
         }
-        @keyframes appear {
-            from { transform: scale(0); }
-            to { transform: scale(1); }
+
+        .grid-cell {
+            width: 100%;
+            height: 100%;
+            background-color: rgba(238, 228, 218, 0.35);
+            border-radius: 4px;
         }
-        /* AI 思考時的微光動畫 */
-        @keyframes thinking-glow {
-            0%, 100% { box-shadow: 0 0 5px #34d399, 0 0 10px #34d399, 0 0 15px #34d399; }
-            50% { box-shadow: 0 0 10px #6ee7b7, 0 0 20px #6ee7b7, 0 0 30px #6ee7b7; }
+
+        /* 動態方塊層 - 絕對定位覆蓋在 Grid 上 */
+        .tile-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 460px;  /* 放大 */
+            height: 460px; /* 放大 */
+            pointer-events: none;
+            z-index: 10;
         }
-        .thinking {
-            animation: thinking-glow 1.5s infinite ease-in-out;
+
+        /* 外層：負責定位 */
+        .tile-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: transform 100ms ease-in-out; 
+            z-index: 10;
+            /* 寬高由 JS 計算寫入 (約 90px) */
         }
+
+        /* 內層：負責外觀與動畫 */
+        .tile-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1;
+        }
+
+        /* 顏色樣式 - 字體放大 */
+        .tile-2 { background: #eee4da; color: #776e65; font-size: 55px; } /* 35 -> 55 */
+        .tile-4 { background: #ede0c8; color: #776e65; font-size: 55px; }
+        .tile-8 { background: #f2b179; color: #f9f6f2; font-size: 55px; }
+        .tile-16 { background: #f59563; color: #f9f6f2; font-size: 48px; } /* 30 -> 48 */
+        .tile-32 { background: #f67c5f; color: #f9f6f2; font-size: 48px; }
+        .tile-64 { background: #f65e3b; color: #f9f6f2; font-size: 48px; }
+        .tile-128 { background: #edcf72; color: #f9f6f2; font-size: 40px; box-shadow: 0 0 10px rgba(243, 215, 116, 0.5); } /* 25 -> 40 */
+        .tile-256 { background: #edcc61; color: #f9f6f2; font-size: 40px; box-shadow: 0 0 15px rgba(243, 215, 116, 0.6); }
+        .tile-512 { background: #edc850; color: #f9f6f2; font-size: 40px; box-shadow: 0 0 15px rgba(243, 215, 116, 0.7); }
+        .tile-1024 { background: #edc53f; color: #f9f6f2; font-size: 32px; box-shadow: 0 0 20px rgba(243, 215, 116, 0.8); } /* 20 -> 32 */
+        .tile-2048 { background: #edc22e; color: #f9f6f2; font-size: 32px; box-shadow: 0 0 25px rgba(243, 215, 116, 1); }
+        .tile-super { background: #3c3a32; color: #f9f6f2; font-size: 24px; }
+
+        .tile-new { animation: appear 200ms ease backwards; }
+        .tile-merged { animation: pop 200ms ease backwards; z-index: 20; }
+
+        @keyframes appear { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 1; transform: scale(1); } }
+        @keyframes pop { 0% { transform: scale(0.8); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+
+        .thinking { box-shadow: 0 0 0 6px #4a90e2; transition: box-shadow 0.2s; }
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center min-h-screen p-4">
+<body class="flex flex-col items-center justify-center min-h-screen relative">
 
-    <div class="w-full max-w-md mx-auto">
-        <header class="flex items-center justify-between mb-4">
-            <div>
-                <h1 class="text-4xl font-bold text-gray-800 dark:text-white">2048</h1>
-                <p class="text-gray-600 dark:text-gray-300">AI 宗師版</p>
-            </div>
-            <div class="flex space-x-2">
-                <div class="bg-gray-200 dark:bg-gray-700 p-3 rounded-lg text-center">
-                    <div class="text-sm font-semibold text-gray-500 dark:text-gray-400">分數</div>
-                    <div id="score" class="text-xl font-bold text-gray-800 dark:text-white">0</div>
+    <div class="game-container">
+        <!-- 頂部資訊 -->
+        <div class="flex justify-between items-start mb-6">
+            <h1 class="text-7xl font-extrabold text-[#776e65]">2048</h1>
+            <div class="flex space-x-3">
+                <div class="bg-[#bbada0] p-3 rounded-md text-white text-center min-w-[100px]">
+                    <div class="text-sm uppercase font-bold text-[#eee4da] tracking-wide">Score</div>
+                    <div id="score" class="text-3xl font-bold">0</div>
                 </div>
-                 <div class="bg-gray-200 dark:bg-gray-700 p-3 rounded-lg text-center">
-                    <div class="text-sm font-semibold text-gray-500 dark:text-gray-400">最高分</div>
-                    <div id="best-score" class="text-xl font-bold text-gray-800 dark:text-white">0</div>
+                <div class="bg-[#bbada0] p-3 rounded-md text-white text-center min-w-[100px]">
+                    <div class="text-sm uppercase font-bold text-[#eee4da] tracking-wide">Best</div>
+                    <div id="best-score" class="text-3xl font-bold">0</div>
                 </div>
             </div>
-        </header>
-        
-        <!-- AI 控制面板 -->
-        <div class="bg-gray-200 dark:bg-gray-700 p-3 rounded-lg mb-4">
-             <div class="flex items-center justify-between">
-                <label for="ai-depth" class="text-sm font-medium text-gray-700 dark:text-gray-300">AI 思考深度: <span id="ai-depth-value" class="font-bold">3</span></label>
-                <div id="ai-status" class="text-sm font-bold text-green-500">閒置中</div>
-            </div>
-            <input id="ai-depth" type="range" min="1" max="10" value="3" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 mt-2">
         </div>
 
-        <div class="mb-4 flex justify-end space-x-2">
-            <button id="auto-play-button" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
-                🤖 自動玩
-            </button>
-            <button id="new-game-button" class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
+        <!-- 狀態與控制 -->
+        <div class="flex justify-between items-center mb-5">
+            <div class="text-[#776e65] text-lg font-bold">
+                合併數字到達 <span class="text-[#f67c5f]">2048!</span>
+            </div>
+            <div class="flex items-center space-x-3 bg-white px-4 py-2 rounded shadow-sm">
+                <span class="text-sm font-bold text-gray-500">AI 深度</span>
+                <input type="range" id="ai-depth" min="1" max="6" value="4" class="w-32 accent-blue-500 cursor-pointer">
+                <span id="depth-val" class="text-base font-bold text-blue-600">4</span>
+            </div>
+        </div>
+
+        <!-- 按鈕群 -->
+        <div class="flex justify-between mb-8 gap-4">
+            <button id="btn-restart" class="bg-[#8f7a66] hover:bg-[#806d59] text-white font-bold py-3 px-6 rounded-md text-lg flex-1 shadow transition-transform active:scale-95">
                 新遊戲
             </button>
+            <button id="btn-undo" class="bg-[#8f7a66] hover:bg-[#806d59] text-white font-bold py-3 px-6 rounded-md text-lg flex-1 shadow transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100" disabled>
+                上一步
+            </button>
+            <button id="btn-ai" class="bg-[#4a90e2] hover:bg-[#357abd] text-white font-bold py-3 px-6 rounded-md text-lg flex-1 shadow transition-transform active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                AI 啟動
+            </button>
         </div>
 
-        <main id="game-container" class="relative bg-gray-300 dark:bg-gray-700 p-3 rounded-lg shadow-lg">
-            <div id="game-over-screen" class="absolute inset-0 bg-white/70 dark:bg-black/70 flex-col items-center justify-center rounded-lg z-10 hidden">
-                <p class="text-4xl font-bold text-gray-800 dark:text-white mb-2">遊戲結束！</p>
-                <button id="try-again-button" class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
+        <!-- 遊戲區 -->
+        <div class="relative w-[460px] h-[460px]">
+            <div id="grid-bg" class="grid-container">
+                <!-- JS 生成格子 -->
+            </div>
+            <div id="tile-container" class="tile-container">
+                <!-- JS 生成方塊 -->
+            </div>
+            
+            <!-- Game Over -->
+            <div id="game-over" class="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center rounded-md hidden opacity-0 transition-opacity duration-300">
+                <p class="text-6xl font-extrabold text-[#776e65] mb-6">Game Over!</p>
+                <button id="btn-retry" class="bg-[#8f7a66] text-white font-bold py-4 px-8 text-xl rounded shadow hover:bg-[#806d59] transition-colors">
                     再試一次
                 </button>
             </div>
-
-            <div id="grid-background" class="grid grid-cols-4 gap-3">
-                <script>for (let i = 0; i < 16; i++) document.write('<div class="w-20 h-20 sm:w-24 sm:h-24 bg-gray-400/50 dark:bg-gray-800/50 rounded-md"></div>');</script>
-            </div>
-            
-            <div id="grid-tiles" class="absolute inset-0 p-3"></div>
-		<a href="./index.html" class="fixed bottom-5 right-5 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors z-10">
-        		返回
-    		</a>
-        </main>
+        </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // DOM 元素獲取
-            const gridTiles = document.getElementById('grid-tiles');
-            const scoreEl = document.getElementById('score');
-            const bestScoreEl = document.getElementById('best-score');
-            const gameOverScreen = document.getElementById('game-over-screen');
-            const newGameButton = document.getElementById('new-game-button');
-            const tryAgainButton = document.getElementById('try-again-button');
-            const autoPlayButton = document.getElementById('auto-play-button');
-            const aiDepthSlider = document.getElementById('ai-depth');
-            const aiDepthValue = document.getElementById('ai-depth-value');
-            const aiStatus = document.getElementById('ai-status');
-            const gameContainer = document.getElementById('game-container');
+    <!-- 返回按鈕 -->
+    <a href="./index.html" class="fixed bottom-8 right-8 bg-gray-600 hover:bg-gray-700 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110 z-50" title="返回主頁">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+    </a>
 
-            // 遊戲常數與變數
-            const GRID_SIZE = 4;
-            let board = [];
-            let score = 0;
-            let bestScore = localStorage.getItem('bestScore2048') || 0;
-            let isAutoPlaying = false;
-            let autoPlayTimeout = null;
-            let searchCache = {}; // 用於快取搜尋結果，加速運算
+<script>
+/**
+ * 2048 核心邏輯
+ */
+const Logic = {
+    size: 4,
+    createGrid: () => Array(4).fill().map(() => Array(4).fill(0)),
+    cloneGrid: (grid) => grid.map(row => [...row]),
+    
+    getEmptyCells(grid) {
+        const cells = [];
+        for(let r=0; r<4; r++)
+            for(let c=0; c<4; c++)
+                if(grid[r][c] === 0) cells.push({r, c});
+        return cells;
+    },
 
-            // 顏色對應表
-            const colorMap = {
-                2: { bg: 'bg-yellow-100', text: 'text-gray-700' }, 4: { bg: 'bg-yellow-200', text: 'text-gray-700' },
-                8: { bg: 'bg-orange-300', text: 'text-white' }, 16: { bg: 'bg-orange-400', text: 'text-white' },
-                32: { bg: 'bg-red-400', text: 'text-white' }, 64: { bg: 'bg-red-500', text: 'text-white' },
-                128: { bg: 'bg-yellow-400', text: 'text-white' }, 256: { bg: 'bg-yellow-500', text: 'text-white' },
-                512: { bg: 'bg-green-400', text: 'text-white' }, 1024: { bg: 'bg-green-500', text: 'text-white' },
-                2048: { bg: 'bg-blue-500', text: 'text-white' }, 4096: { bg: 'bg-blue-600', text: 'text-white' },
-                8192: { bg: 'bg-indigo-600', text: 'text-white' },
-            };
-            
-            // --- 遊戲核心功能 ---
-
-            function initGame() {
-                stopAutoPlay();
-                board = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
-                score = 0;
-                updateScore(0);
-                bestScoreEl.textContent = bestScore;
-                gameOverScreen.classList.add('hidden');
-                gameOverScreen.classList.remove('flex');
-                const newTiles = [addRandomTile(), addRandomTile()].filter(Boolean);
-                renderBoard(newTiles);
+    slideRowLeft(row) {
+        const arr = row.filter(val => val !== 0);
+        let score = 0;
+        for (let i = 0; i < arr.length - 1; i++) {
+            if (arr[i] === arr[i + 1]) {
+                arr[i] *= 2;
+                score += arr[i];
+                arr.splice(i + 1, 1);
             }
-            
-            function renderBoard(newTiles = []) {
-                gridTiles.innerHTML = '';
-                const newTileSet = new Set(newTiles.map(t => `${t.r},${t.c}`));
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        if (board[r][c] !== 0) {
-                            const tile = createTile(r, c, board[r][c]);
-                            if (newTileSet.has(`${r},${c}`)) {
-                                tile.classList.add('tile-new');
-                            }
-                        }
-                    }
-                }
+        }
+        while (arr.length < 4) arr.push(0);
+        return { row: arr, score };
+    },
+
+    rotateLeft(grid) {
+        const newGrid = Array(4).fill().map(() => Array(4).fill(0));
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                newGrid[r][c] = grid[c][3 - r];
             }
+        }
+        return newGrid;
+    },
 
-            function createTile(row, col, value) {
-                const tile = document.createElement('div');
-                const { bg, text } = colorMap[value] || { bg: 'bg-gray-200', text: 'text-gray-800' };
-                const sizeClass = 'w-20 h-20 sm:w-24 sm:h-24';
-                const fontSize = value > 1000 ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl';
-                tile.className = `tile absolute ${sizeClass} ${bg} ${text} ${fontSize} font-bold flex items-center justify-center rounded-md`;
-                tile.style.top = `calc(${row} * 25% + 0.75rem)`;
-                tile.style.left = `calc(${col} * 25% + 0.75rem)`;
-                tile.textContent = value;
-                gridTiles.appendChild(tile);
-                return tile;
-            }
+    move(grid, direction) {
+        let tempGrid = Logic.cloneGrid(grid);
+        let rotations = 0;
+        if (direction === 'ArrowUp') rotations = 1;
+        else if (direction === 'ArrowRight') rotations = 2;
+        else if (direction === 'ArrowDown') rotations = 3;
 
-            function addRandomTile() {
-                let emptyTiles = [];
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        if (board[r][c] === 0) emptyTiles.push({ r, c });
-                    }
-                }
-                if (emptyTiles.length > 0) {
-                    const { r, c } = emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
-                    board[r][c] = Math.random() < 0.9 ? 2 : 4;
-                    return { r, c };
-                }
-                return null;
-            }
-            
-            function updateScore(points) {
-                score += points;
-                scoreEl.textContent = score;
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestScoreEl.textContent = bestScore;
-                    localStorage.setItem('bestScore2048', bestScore);
-                }
-            }
+        for (let i = 0; i < rotations; i++) tempGrid = Logic.rotateLeft(tempGrid);
 
-            function move(direction) {
-                let moved = false;
-                let tempBoard = JSON.parse(JSON.stringify(board));
-                let points = 0;
+        let totalScore = 0;
+        let moved = false;
+        for (let r = 0; r < 4; r++) {
+            const res = Logic.slideRowLeft(tempGrid[r]);
+            if (res.row.join(',') !== tempGrid[r].join(',')) moved = true;
+            tempGrid[r] = res.row;
+            totalScore += res.score;
+        }
 
-                const processLine = (line, reverse) => {
-                    if (reverse) line.reverse();
-                    let filteredLine = line.filter(val => val !== 0);
-                    for (let i = 0; i < filteredLine.length - 1; i++) {
-                        if (filteredLine[i] === filteredLine[i + 1]) {
-                            filteredLine[i] *= 2;
-                            points += filteredLine[i];
-                            filteredLine.splice(i + 1, 1);
-                        }
-                    }
-                    let newLine = Array(GRID_SIZE).fill(0);
-                    filteredLine.forEach((val, index) => newLine[index] = val);
-                    if (reverse) newLine.reverse();
-                    return newLine;
-                };
+        for (let i = 0; i < (4 - rotations) % 4; i++) tempGrid = Logic.rotateLeft(tempGrid);
 
-                if (direction === 'ArrowUp' || direction === 'ArrowDown') {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        let col = board.map(row => row[c]);
-                        let newCol = processLine(col, direction === 'ArrowDown');
-                        for (let r = 0; r < GRID_SIZE; r++) board[r][c] = newCol[r];
-                    }
-                } else if (direction === 'ArrowLeft' || direction === 'ArrowRight') {
-                    for (let r = 0; r < GRID_SIZE; r++) {
-                        board[r] = processLine(board[r], direction === 'ArrowRight');
-                    }
-                }
-                
-                moved = JSON.stringify(tempBoard) !== JSON.stringify(board);
-                if(moved) updateScore(points);
-                return moved;
-            }
+        return { grid: tempGrid, score: totalScore, moved };
+    },
 
-            function isGameOver() {
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        if (board[r][c] === 0) return false;
-                        if (r < GRID_SIZE - 1 && board[r][c] === board[r + 1][c]) return false;
-                        if (c < GRID_SIZE - 1 && board[r][c] === board[r][c + 1]) return false;
-                    }
-                }
-                return true;
-            }
-            
-            function handleKeyPress(e) {
-                const directions = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-                if (directions.includes(e.key)) {
-                    e.preventDefault();
-                    if (gameOverScreen.classList.contains('hidden')) {
-                        const moved = move(e.key);
-                        if (moved) {
-                            const newTile = addRandomTile();
-                            renderBoard(newTile ? [newTile] : []);
-                        }
-                        if (isGameOver()) {
-                            gameOverScreen.classList.remove('hidden');
-                            gameOverScreen.classList.add('flex');
-                            stopAutoPlay();
-                        }
-                    }
-                }
-            }
-            
-            // --- AI 自動化邏輯 (Expectimax Search) ---
-            
-            function toggleAutoPlay() {
-                isAutoPlaying = !isAutoPlaying;
-                if (isAutoPlaying) {
-                    autoPlayButton.textContent = '⏹️ 停止';
-                    autoPlayButton.classList.add('bg-red-500', 'hover:bg-red-600');
-                    autoPlayButton.classList.remove('bg-green-500', 'hover:bg-green-600');
-                    aiStep();
-                } else {
-                    stopAutoPlay();
-                }
-            }
+    checkGameOver(grid) {
+        if (Logic.getEmptyCells(grid).length > 0) return false;
+        const dirs = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        for (let d of dirs) {
+            if (Logic.move(grid, d).moved) return false;
+        }
+        return true;
+    }
+};
 
-            function stopAutoPlay() {
-                isAutoPlaying = false;
-                clearTimeout(autoPlayTimeout);
-                autoPlayButton.textContent = '🤖 自動玩';
-                autoPlayButton.classList.remove('bg-red-500', 'hover:bg-red-600');
-                autoPlayButton.classList.add('bg-green-500', 'hover:bg-green-600');
-                aiStatus.textContent = '閒置中';
-                gameContainer.classList.remove('thinking');
-            }
+/**
+ * 遊戲管理器 (UI & State)
+ */
+class GameManager {
+    constructor() {
+        this.grid = Logic.createGrid();
+        this.score = 0;
+        this.bestScore = parseInt(localStorage.getItem('bestScore2048')) || 0;
+        this.history = [];
+        this.over = false;
 
-            function aiStep() {
-                if (!isAutoPlaying || isGameOver()) {
-                    stopAutoPlay();
-                    return;
-                }
+        this.gridBg = document.getElementById('grid-bg');
+        this.tileContainer = document.getElementById('tile-container');
+        this.scoreEl = document.getElementById('score');
+        this.bestScoreEl = document.getElementById('best-score');
+        this.undoBtn = document.getElementById('btn-undo');
+        this.gameOverEl = document.getElementById('game-over');
+        this.aiBtn = document.getElementById('btn-ai');
 
-                aiStatus.textContent = '思考中...';
-                gameContainer.classList.add('thinking');
+        this.renderBackground();
+        this.setupInputs();
+        this.restart();
+    }
 
-                setTimeout(() => {
-                    const bestMove = findBestMove();
-                    if (bestMove) {
-                        handleKeyPress({ key: bestMove, preventDefault: () => {} });
-                    }
-                    aiStatus.textContent = '移動中';
-                    gameContainer.classList.remove('thinking');
-                    
-                    autoPlayTimeout = setTimeout(aiStep, 50); // 降低延遲時間，加速遊戲
-                }, 50); 
-            }
+    renderBackground() {
+        this.gridBg.innerHTML = '';
+        for (let i = 0; i < 16; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'grid-cell';
+            this.gridBg.appendChild(cell);
+        }
+    }
 
-            function findBestMove() {
-                searchCache = {};
-                const depth = parseInt(aiDepthSlider.value);
-                return expectimax(board, depth, true).direction;
-            }
+    updateScore(add) {
+        this.score += add;
+        if (this.score > this.bestScore) {
+            this.bestScore = this.score;
+            localStorage.setItem('bestScore2048', this.bestScore);
+        }
+        this.scoreEl.innerText = this.score;
+        this.bestScoreEl.innerText = this.bestScore;
+    }
 
-            function expectimax(currentBoard, depth, isMaxPlayer) {
-                const boardKey = JSON.stringify(currentBoard);
-                if (depth === 0 || (boardKey in searchCache && searchCache[boardKey].depth >= depth)) {
-                   if (boardKey in searchCache) return searchCache[boardKey];
-                   return { score: evaluateBoard(currentBoard) };
-                }
-
-                if (isMaxPlayer) {
-                    let bestScore = -Infinity;
-                    let bestDirection = null;
-                    const directions = ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'];
-
-                    for (const direction of directions) {
-                        let tempBoard = JSON.parse(JSON.stringify(currentBoard));
-                        if (simulateMove(tempBoard, direction)) {
-                            let result = expectimax(tempBoard, depth - 1, false);
-                            if (result.score > bestScore) {
-                                bestScore = result.score;
-                                bestDirection = direction;
-                            }
-                        }
-                    }
-                    if (bestDirection === null) {
-                        return { score: -1e10, direction: 'ArrowUp' }; // 使用極小值代表死局
-                    }
-                    const result = { score: bestScore, direction: bestDirection, depth: depth };
-                    searchCache[boardKey] = result;
-                    return result;
-
-                } else {
-                    let totalScore = 0;
-                    let emptyTiles = [];
-                    for(let r = 0; r < GRID_SIZE; r++) {
-                        for(let c = 0; c < GRID_SIZE; c++) {
-                            if(currentBoard[r][c] === 0) emptyTiles.push({r, c});
-                        }
-                    }
-
-                    if (emptyTiles.length === 0) {
-                        return { score: evaluateBoard(currentBoard) };
-                    }
-
-                    for (const {r, c} of emptyTiles) {
-                        let boardWith2 = JSON.parse(JSON.stringify(currentBoard));
-                        boardWith2[r][c] = 2;
-                        totalScore += 0.9 * expectimax(boardWith2, depth - 1, true).score;
-
-                        let boardWith4 = JSON.parse(JSON.stringify(currentBoard));
-                        boardWith4[r][c] = 4;
-                        totalScore += 0.1 * expectimax(boardWith4, depth - 1, true).score;
-                    }
-                    
-                    const avgScore = totalScore / emptyTiles.length;
-                    const result = { score: avgScore, depth: depth };
-                    searchCache[boardKey] = result;
-                    return result;
-                }
-            }
-            
-            function simulateMove(simBoard, direction) {
-                let originalBoardStr = JSON.stringify(simBoard);
-                const processLine = (line, reverse) => {
-                    if (reverse) line.reverse();
-                    let filteredLine = line.filter(val => val !== 0);
-                    for (let i = 0; i < filteredLine.length - 1; i++) {
-                        if (filteredLine[i] === filteredLine[i + 1]) {
-                            filteredLine[i] *= 2;
-                            filteredLine.splice(i + 1, 1);
-                        }
-                    }
-                    let newLine = Array(GRID_SIZE).fill(0);
-                    filteredLine.forEach((val, index) => newLine[index] = val);
-                    if (reverse) newLine.reverse();
-                    return newLine;
-                };
-                if (direction === 'ArrowUp' || direction === 'ArrowDown') {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        let col = simBoard.map(row => row[c]);
-                        let newCol = processLine(col, direction === 'ArrowDown');
-                        for (let r = 0; r < GRID_SIZE; r++) simBoard[r][c] = newCol[r];
-                    }
-                } else if (direction === 'ArrowLeft' || direction === 'ArrowRight') {
-                    for (let r = 0; r < GRID_SIZE; r++) {
-                        simBoard[r] = processLine(simBoard[r], direction === 'ArrowRight');
-                    }
-                }
-                return originalBoardStr !== JSON.stringify(simBoard);
-            }
-            
-            // AI 評估函式 (啟發式) - 根據策略優化
-            function evaluateBoard(evalBoard) {
-                let emptyCells = 0, smoothness = 0, mono = 0, maxValue = 0, merges = 0;
-                let maxPos = { r: 0, c: 0 };
-
-                // 1. 一次遍歷收集所有數據
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        const cellValue = evalBoard[r][c];
-                        if (cellValue === 0) {
-                            emptyCells++;
-                        } else {
-                            if (cellValue > maxValue) {
-                                maxValue = cellValue;
-                                maxPos = { r, c };
-                            }
-                            // 平滑度
-                            const valLog = Math.log2(cellValue);
-                            if (c < GRID_SIZE - 1 && evalBoard[r][c + 1] !== 0) {
-                                smoothness -= Math.abs(valLog - Math.log2(evalBoard[r][c + 1]));
-                            }
-                            if (r < GRID_SIZE - 1 && evalBoard[r + 1][c] !== 0) {
-                                smoothness -= Math.abs(valLog - Math.log2(evalBoard[r + 1][c]));
-                            }
-                            // 可合併數量
-                            if (c < GRID_SIZE - 1 && cellValue === evalBoard[r][c+1]) merges++;
-                            if (r < GRID_SIZE - 1 && cellValue === evalBoard[r+1][c]) merges++;
-                        }
-                    }
-                }
-
-                // 2. 單調性 (鼓勵蛇形排列)
-                const totals = [0, 0, 0, 0]; // up, down, left, right
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    for (let c = 0; c < GRID_SIZE - 1; c++) {
-                        const current = evalBoard[r][c] > 0 ? Math.log2(evalBoard[r][c]) : 0;
-                        const next = evalBoard[r][c + 1] > 0 ? Math.log2(evalBoard[r][c + 1]) : 0;
-                        if (current > next) totals[2] += next - current;
-                        else if (next > current) totals[3] += current - next;
-                    }
-                }
-                for (let c = 0; c < GRID_SIZE; c++) {
-                    for (let r = 0; r < GRID_SIZE - 1; r++) {
-                        const current = evalBoard[r][c] > 0 ? Math.log2(evalBoard[r][c]) : 0;
-                        const next = evalBoard[r + 1][c] > 0 ? Math.log2(evalBoard[r + 1][c]) : 0;
-                        if (current > next) totals[0] += next - current;
-                        else if (next > current) totals[1] += current - next;
-                    }
-                }
-                mono = Math.max(totals[0], totals[1]) + Math.max(totals[2], totals[3]);
-
-                // 3. 最大值在角落的獎勵
-                let maxInCornerBonus = 0;
-                const isCorner = (maxPos.r === 0 || maxPos.r === GRID_SIZE - 1) && (maxPos.c === 0 || maxPos.c === GRID_SIZE - 1);
-                if (isCorner) {
-                    maxInCornerBonus = Math.log2(maxValue);
-                }
-
-                // 4. 最終加權分數
-                const emptyWeight = 4.0;
-                const smoothWeight = 0.1;
-                const monoWeight = 1.5;
-                const maxWeight = 1.0;
-                const cornerWeight = 2.0;
-                const mergeWeight = 0.7;
-
-                let finalScore = 0;
-                finalScore += (emptyCells > 0 ? Math.log(emptyCells) : -100) * emptyWeight;
-                finalScore += smoothness * smoothWeight;
-                finalScore += mono * monoWeight;
-                finalScore += Math.log2(maxValue || 1) * maxWeight;
-                finalScore += maxInCornerBonus * cornerWeight;
-                finalScore += merges * mergeWeight;
-
-                return finalScore;
-            }
-
-            // --- 事件監聽 ---
-            document.addEventListener('keydown', handleKeyPress);
-            autoPlayButton.addEventListener('click', toggleAutoPlay);
-            aiDepthSlider.addEventListener('input', (e) => {
-                aiDepthValue.textContent = e.target.value;
-            });
-
-            let touchStartX = 0, touchStartY = 0;
-            gameContainer.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, false);
-            gameContainer.addEventListener('touchend', e => {
-                const touchEndX = e.changedTouches[0].screenX; const touchEndY = e.changedTouches[0].screenY;
-                const dx = touchEndX - touchStartX; const dy = touchEndY - touchStartY;
-                if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
-                    let direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft') : (dy > 0 ? 'ArrowDown' : 'ArrowUp');
-                    handleKeyPress({ key: direction, preventDefault: () => {} });
-                }
-            }, false);
-
-            newGameButton.addEventListener('click', initGame);
-            tryAgainButton.addEventListener('click', initGame);
-
-            initGame();
+    saveState() {
+        if (this.history.length > 20) this.history.shift();
+        this.history.push({
+            grid: Logic.cloneGrid(this.grid),
+            score: this.score
         });
-    </script>
+        this.undoBtn.disabled = false;
+    }
+
+    undo() {
+        if (this.history.length === 0) return;
+        const prev = this.history.pop();
+        this.grid = prev.grid;
+        this.score = prev.score;
+        this.renderTiles(null);
+        this.scoreEl.innerText = this.score;
+        if (this.history.length === 0) this.undoBtn.disabled = true;
+    }
+
+    addRandomTile() {
+        const empties = Logic.getEmptyCells(this.grid);
+        if (empties.length > 0) {
+            const { r, c } = empties[Math.floor(Math.random() * empties.length)];
+            const val = Math.random() < 0.9 ? 2 : 4;
+            this.grid[r][c] = val;
+            return { r, c, val };
+        }
+        return null;
+    }
+
+    restart() {
+        this.grid = Logic.createGrid();
+        this.score = 0;
+        this.history = [];
+        this.over = false;
+        
+        this.undoBtn.disabled = true;
+        this.aiBtn.disabled = false;
+        this.aiBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+        
+        this.gameOverEl.classList.add('hidden');
+        this.gameOverEl.classList.remove('opacity-100');
+        this.gameOverEl.classList.add('opacity-0');
+
+        this.updateScore(0);
+        const t1 = this.addRandomTile();
+        const t2 = this.addRandomTile();
+        this.renderTiles([t1, t2]);
+    }
+
+    handleMove(direction) {
+        if (this.over) return;
+        const result = Logic.move(this.grid, direction);
+        if (result.moved) {
+            this.saveState();
+            this.grid = result.grid;
+            this.updateScore(result.score);
+            const newTile = this.addRandomTile();
+            this.renderTiles(newTile);
+            if (Logic.checkGameOver(this.grid)) this.endGame();
+        }
+    }
+
+    endGame() {
+        this.over = true;
+        this.gameOverEl.classList.remove('hidden');
+        setTimeout(() => this.gameOverEl.classList.remove('opacity-0'), 10);
+        setTimeout(() => this.gameOverEl.classList.add('opacity-100'), 10);
+        
+        if (window.ai) window.ai.stop();
+        this.aiBtn.disabled = true;
+        this.aiBtn.innerText = "AI 啟動";
+        this.aiBtn.classList.remove('bg-red-500');
+        this.aiBtn.classList.add('bg-[#4a90e2]');
+    }
+
+    renderTiles(newTileOrTiles) {
+        this.tileContainer.innerHTML = '';
+        // 放大版參數：寬度 460px, 間距 20px
+        const GAP = 20;
+        const CONTAINER_SIZE = 460;
+        const CELL_SIZE = (CONTAINER_SIZE - GAP * 5) / 4; // 正好 90px
+
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                const val = this.grid[r][c];
+                if (val !== 0) {
+                    const wrapper = document.createElement('div');
+                    const isNew = Array.isArray(newTileOrTiles) 
+                        ? newTileOrTiles.some(t => t && t.r === r && t.c === c)
+                        : (newTileOrTiles && newTileOrTiles.r === r && newTileOrTiles.c === c);
+
+                    // 座標計算：包含 Padding (GAP)
+                    const top = GAP + r * (CELL_SIZE + GAP);
+                    const left = GAP + c * (CELL_SIZE + GAP);
+
+                    wrapper.className = 'tile-wrapper';
+                    wrapper.style.width = `${CELL_SIZE}px`;
+                    wrapper.style.height = `${CELL_SIZE}px`;
+                    // 這裡的 translate 是相對於 tile-container 的左上角 (0,0)
+                    wrapper.style.transform = `translate(${left}px, ${top}px)`;
+                    
+                    const inner = document.createElement('div');
+                    inner.className = `tile-inner tile-${val > 2048 ? 'super' : val}`;
+                    inner.innerText = val;
+
+                    if (isNew) inner.classList.add('tile-new');
+                    else if (val > 2048) inner.classList.add('tile-merged');
+
+                    wrapper.appendChild(inner);
+                    this.tileContainer.appendChild(wrapper);
+                }
+            }
+        }
+    }
+
+    setupInputs() {
+        document.addEventListener('keydown', (e) => {
+            if(this.over) return;
+            const map = {
+                'ArrowUp': 'ArrowUp', 'w': 'ArrowUp',
+                'ArrowDown': 'ArrowDown', 's': 'ArrowDown',
+                'ArrowLeft': 'ArrowLeft', 'a': 'ArrowLeft',
+                'ArrowRight': 'ArrowRight', 'd': 'ArrowRight'
+            };
+            if (map[e.key]) {
+                e.preventDefault();
+                this.handleMove(map[e.key]);
+            }
+        });
+
+        let startX, startY;
+        const container = document.querySelector('.game-container');
+        container.addEventListener('touchstart', e => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: false });
+
+        container.addEventListener('touchend', e => {
+            if (!startX || !startY || this.over) return;
+            let dx = e.changedTouches[0].clientX - startX;
+            let dy = e.changedTouches[0].clientY - startY;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
+                if (Math.abs(dx) > Math.abs(dy)) this.handleMove(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+                else this.handleMove(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+            }
+            startX = null;
+        }, { passive: false });
+
+        document.getElementById('btn-restart').onclick = () => { if(window.ai) window.ai.stop(); this.restart(); };
+        document.getElementById('btn-undo').onclick = () => { if(window.ai && window.ai.running) return; this.undo(); };
+        document.getElementById('btn-retry').onclick = () => { if(window.ai) window.ai.stop(); this.restart(); };
+    }
+}
+
+/**
+ * AI 模組
+ */
+class AI {
+    constructor(game) {
+        this.game = game;
+        this.running = false;
+        this.btn = document.getElementById('btn-ai');
+        this.depthInput = document.getElementById('ai-depth');
+        this.depthVal = document.getElementById('depth-val');
+        this.depthInput.oninput = (e) => this.depthVal.innerText = e.target.value;
+        this.btn.onclick = () => this.toggle();
+    }
+
+    toggle() {
+        if(this.game.over) return;
+        this.running = !this.running;
+        const gridBg = document.getElementById('grid-bg');
+        if (this.running) {
+            this.btn.innerText = "停止 AI";
+            this.btn.classList.remove('bg-[#4a90e2]', 'hover:bg-[#357abd]');
+            this.btn.classList.add('bg-red-500', 'hover:bg-red-600');
+            gridBg.classList.add('thinking');
+            this.runLoop();
+        } else {
+            this.stop();
+        }
+    }
+
+    stop() {
+        this.running = false;
+        const gridBg = document.getElementById('grid-bg');
+        gridBg.classList.remove('thinking');
+        if (!this.game.over) {
+            this.btn.innerText = "AI 啟動";
+            this.btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+            this.btn.classList.add('bg-[#4a90e2]', 'hover:bg-[#357abd]');
+        }
+    }
+
+    async runLoop() {
+        if (!this.running || this.game.over) {
+            this.stop();
+            return;
+        }
+        const depth = parseInt(this.depthInput.value);
+        setTimeout(() => {
+            const bestMove = this.getBestMove(this.game.grid, depth);
+            if (bestMove) {
+                this.game.handleMove(bestMove);
+                const delay = depth > 4 ? 50 : 100;
+                if(this.running) this.runLoop();
+            } else {
+                this.stop();
+            }
+        }, 50);
+    }
+
+    getBestMove(grid, depth) {
+        return this.expectimax(grid, depth, true).move;
+    }
+
+    expectimax(grid, depth, isPlayer) {
+        if (depth === 0) return { score: this.evaluate(grid) };
+
+        if (isPlayer) {
+            let bestScore = -Infinity;
+            let bestMove = null;
+            const moves = ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'];
+            for (let m of moves) {
+                const res = Logic.move(grid, m);
+                if (res.moved) {
+                    const result = this.expectimax(res.grid, depth - 1, false);
+                    if (result.score > bestScore) {
+                        bestScore = result.score;
+                        bestMove = m;
+                    }
+                }
+            }
+            return { score: bestScore, move: bestMove };
+        } else {
+            const empties = Logic.getEmptyCells(grid);
+            if (empties.length === 0) return { score: this.evaluate(grid) };
+            
+            let totalScore = 0;
+            let candidates = empties;
+            if (depth >= 3 && empties.length > 4) {
+                candidates = [];
+                while(candidates.length < 4) {
+                    let item = empties[Math.floor(Math.random()*empties.length)];
+                    if(!candidates.includes(item)) candidates.push(item);
+                }
+            }
+
+            for (let { r, c } of candidates) {
+                let g2 = Logic.cloneGrid(grid); g2[r][c] = 2;
+                totalScore += 0.9 * this.expectimax(g2, depth - 1, true).score;
+                if (depth < 3) {
+                    let g4 = Logic.cloneGrid(grid); g4[r][c] = 4;
+                    totalScore += 0.1 * this.expectimax(g4, depth - 1, true).score;
+                }
+            }
+            return { score: totalScore / candidates.length };
+        }
+    }
+
+    evaluate(grid) {
+        const emptyWeight = 270;
+        const monoWeight = 50;   // 稍微提升
+        const smoothWeight = 20; // 稍微提升
+        const maxCornerWeight = 120;
+
+        let empty = 0;
+        let maxVal = 0;
+        let maxPos = null;
+
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                if (grid[r][c] === 0) empty++;
+                else if (grid[r][c] > maxVal) {
+                    maxVal = grid[r][c];
+                    maxPos = { r, c };
+                }
+            }
+        }
+
+        let mono = 0;
+        const dirs = [0, 0, 0, 0];
+        // 水平
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 3; c++) {
+                let curr = grid[r][c] ? Math.log2(grid[r][c]) : 0;
+                let next = grid[r][c+1] ? Math.log2(grid[r][c+1]) : 0;
+                if (curr > next) dirs[2] += next - curr; 
+                else dirs[3] += curr - next;
+            }
+        }
+        // 垂直
+        for (let c = 0; c < 4; c++) {
+            for (let r = 0; r < 3; r++) {
+                let curr = grid[r][c] ? Math.log2(grid[r][c]) : 0;
+                let next = grid[r+1][c] ? Math.log2(grid[r+1][c]) : 0;
+                if (curr > next) dirs[0] += next - curr;
+                else dirs[1] += curr - next;
+            }
+        }
+        mono = Math.max(dirs[0], dirs[1]) + Math.max(dirs[2], dirs[3]);
+
+        let smooth = 0;
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                if (grid[r][c] !== 0) {
+                    let val = Math.log2(grid[r][c]);
+                    if (c < 3 && grid[r][c+1] !== 0) smooth -= Math.abs(val - Math.log2(grid[r][c+1]));
+                    if (r < 3 && grid[r+1][c] !== 0) smooth -= Math.abs(val - Math.log2(grid[r+1][c]));
+                }
+            }
+        }
+
+        let isCorner = false;
+        if (maxPos) {
+            isCorner = (maxPos.r === 0 || maxPos.r === 3) && (maxPos.c === 0 || maxPos.c === 3);
+        }
+
+        return (empty * emptyWeight) + 
+               (mono * monoWeight) + 
+               (smooth * smoothWeight) + 
+               (isCorner ? Math.log2(maxVal) * maxCornerWeight : -maxCornerWeight);
+    }
+}
+
+const game = new GameManager();
+const ai = new AI(game);
+window.ai = ai;
+
+</script>
 </body>
 </html>
