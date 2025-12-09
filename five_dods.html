@@ -24,7 +24,6 @@
             position: relative;
             margin: 0 auto;
             width: 100%;
-            max-width: 600px;
         }
 
         .board-container {
@@ -116,71 +115,51 @@
         .dot-black { background-color: #1a1a1a; border: 1px solid #444; }
         .dot-white { background-color: #ffffff; border: 1px solid #ccc; }
 
-        /* 自定義按鈕樣式 - 修復 CDN 相容性問題 */
+        /* 自定義按鈕樣式 */
         .select-card {
-            border: 2px solid #e5e7eb; /* gray-200 */
+            border: 2px solid #e5e7eb;
             background-color: white;
             transition: all 0.2s;
             cursor: pointer;
         }
         .select-card:hover {
-            background-color: #f9fafb; /* gray-50 */
-            border-color: #d1d5db; /* gray-300 */
+            background-color: #f9fafb;
+            border-color: #d1d5db;
         }
         .select-card.active {
-            border-color: #4f46e5; /* indigo-600 */
-            background-color: #eef2ff; /* indigo-50 */
-            color: #4338ca; /* indigo-700 */
+            border-color: #4f46e5;
+            background-color: #eef2ff;
+            color: #4338ca;
             box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.1), 0 2px 4px -1px rgba(79, 70, 229, 0.06);
         }
         
-        /* 難度特定顏色 */
         .select-card.active[data-diff="easy"] {
-            border-color: #10b981; /* emerald-500 */
-            background-color: #ecfdf5; /* emerald-50 */
-            color: #047857; /* emerald-700 */
+            border-color: #10b981; background-color: #ecfdf5; color: #047857;
         }
         .select-card.active[data-diff="medium"] {
-            border-color: #3b82f6; /* blue-500 */
-            background-color: #eff6ff; /* blue-50 */
-            color: #1d4ed8; /* blue-700 */
+            border-color: #3b82f6; background-color: #eff6ff; color: #1d4ed8;
         }
         .select-card.active[data-diff="hard"] {
-            border-color: #ef4444; /* red-500 */
-            background-color: #fef2f2; /* red-50 */
-            color: #b91c1c; /* red-700 */
+            border-color: #ef4444; background-color: #fef2f2; color: #b91c1c;
         }
 
-        /* 工具列開關 */
+        /* Toggle Switch */
         .toggle-switch {
-            appearance: none;
-            width: 36px;
-            height: 20px;
-            background: #d1d5db;
-            border-radius: 20px;
-            position: relative;
-            outline: none;
-            cursor: pointer;
-            transition: background 0.3s;
+            appearance: none; width: 36px; height: 20px; background: #d1d5db;
+            border-radius: 20px; position: relative; outline: none; cursor: pointer; transition: background 0.3s;
         }
         .toggle-switch::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 16px;
-            height: 16px;
-            background: white;
-            border-radius: 50%;
-            transition: transform 0.3s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+            background: white; border-radius: 50%; transition: transform 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
-        .toggle-switch:checked {
-            background: #4f46e5;
-        }
-        .toggle-switch:checked::after {
-            transform: translateX(16px);
-        }
+        .toggle-switch:checked { background: #4f46e5; }
+        .toggle-switch:checked::after { transform: translateX(16px); }
+
+        /* 聊天室捲軸美化 */
+        #chat-messages::-webkit-scrollbar { width: 6px; }
+        #chat-messages::-webkit-scrollbar-track { background: #f1f1f1; }
+        #chat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        #chat-messages::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
     </style>
 </head>
@@ -194,9 +173,7 @@
             </h1>
             <p class="text-gray-500 mb-8 tracking-wider font-medium">PROFESSIONAL GOBANG</p>
 
-            <!-- 模式選擇區 -->
             <div class="space-y-4">
-                
                 <!-- 雙人對戰 -->
                 <button onclick="startGame('pvp')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-3 text-lg shadow-lg transition transform hover:-translate-y-1 btn border-b-4 border-emerald-800">
                     <i class="fa-solid fa-user-group text-2xl"></i> 
@@ -212,13 +189,12 @@
                     <div class="flex-grow border-t border-gray-300"></div>
                 </div>
 
-                <!-- 挑戰 AI 設定區 (優化版介面) -->
+                <!-- 挑戰 AI -->
                 <div class="bg-gray-50 rounded-xl p-5 border border-gray-200 shadow-inner text-left">
                     <div class="flex items-center gap-2 mb-4 text-indigo-800 font-bold border-b border-gray-200 pb-2">
                         <i class="fa-solid fa-robot"></i> 挑戰人工智慧
                     </div>
                     
-                    <!-- 難度設定：三欄卡片式設計 -->
                     <div class="mb-5">
                         <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">AI 難度</label>
                         <div class="grid grid-cols-3 gap-2">
@@ -237,7 +213,6 @@
                         </div>
                     </div>
 
-                    <!-- 執棋設定：雙欄大按鈕設計 -->
                     <div class="mb-5">
                         <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">選擇執棋</label>
                         <div class="grid grid-cols-2 gap-3">
@@ -263,103 +238,132 @@
             </div>
             
             <footer class="mt-8 text-gray-400 text-xs">
-                v3.3 Professional • Designed by Ricky
+                v3.4 Professional • Designed by Gemini
             </footer>
         </div>
 
-        <!-- 這裡加入了您要求的返回按鈕 -->
-        <!-- 使用 fixed 定位，但放在 transform 的父容器內，所以會跟著選單一起滑動消失，不會干擾遊戲 -->
         <a href="./index.html" class="fixed bottom-5 right-5 bg-stone-600 hover:bg-stone-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-colors z-50 flex items-center gap-2 backdrop-blur-sm bg-opacity-90">
             <i class="fa-solid fa-arrow-right-from-bracket"></i> 返回首頁
         </a>
     </div>
 
     <!-- 遊戲主畫面 (Game Screen) -->
-    <div id="game-screen" class="flex flex-col items-center min-h-screen py-4 px-3 select-none w-full max-w-2xl mx-auto">
+    <!-- 修改容器佈局：大螢幕時改為橫向排列 (row)，小螢幕維持直向 (col) -->
+    <div id="game-screen" class="flex flex-col lg:flex-row items-center lg:items-start lg:justify-center min-h-screen py-4 px-3 select-none w-full max-w-6xl mx-auto gap-6 transition-all duration-500">
         
-        <!-- 頂部功能列 -->
-        <div class="w-full flex justify-between items-center mb-3">
-            <button onclick="backToMenu()" class="text-gray-600 hover:text-amber-700 font-bold flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow-sm hover:shadow transition text-sm">
-                <i class="fa-solid fa-chevron-left"></i> 選單
-            </button>
-            <div class="flex items-center gap-3">
-                 <label class="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg shadow-sm">
-                    <span class="text-xs text-gray-600 font-bold">顯示手數</span>
-                    <input type="checkbox" id="toggle-numbers" class="toggle-switch" onchange="toggleMoveNumbers()">
-                </label>
-                <button onclick="toggleSound()" id="btn-sound" class="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-600 hover:text-blue-600">
-                    <i class="fa-solid fa-volume-high"></i>
+        <!-- 左側：遊戲區 (棋盤與控制) -->
+        <div id="game-left-col" class="w-full max-w-2xl flex flex-col">
+            <!-- 頂部功能列 -->
+            <div class="w-full flex justify-between items-center mb-3">
+                <button onclick="backToMenu()" class="text-gray-600 hover:text-amber-700 font-bold flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow-sm hover:shadow transition text-sm">
+                    <i class="fa-solid fa-chevron-left"></i> 選單
+                </button>
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg shadow-sm">
+                        <span class="text-xs text-gray-600 font-bold">顯示手數</span>
+                        <input type="checkbox" id="toggle-numbers" class="toggle-switch" onchange="toggleMoveNumbers()">
+                    </label>
+                    <button onclick="toggleSound()" id="btn-sound" class="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-600 hover:text-blue-600">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 玩家狀態與標題 -->
+            <div class="w-full bg-white rounded-xl shadow-md p-3 mb-4 border border-gray-100">
+                <div class="text-center mb-2">
+                    <span id="game-title" class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded tracking-wide border border-amber-100">人機對戰 - 普通</span>
+                </div>
+                
+                <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2">
+                    <!-- 黑方 -->
+                    <div id="player-indicator-black" class="flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="status-dot dot-black w-4 h-4"></span>
+                            <span class="font-bold text-gray-800">黑棋</span>
+                        </div>
+                        <span id="name-black" class="text-xs text-gray-500">玩家</span>
+                    </div>
+
+                    <!-- VS -->
+                    <div class="px-4 text-gray-300 font-black italic text-xl">VS</div>
+
+                    <!-- 白方 -->
+                    <div id="player-indicator-white" class="flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="status-dot dot-white w-4 h-4"></span>
+                            <span class="font-bold text-gray-800">白棋</span>
+                        </div>
+                        <span id="name-white" class="text-xs text-gray-500">AI</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 棋盤區域 -->
+            <div class="board-wrapper w-full">
+                <div class="board-container" id="board-container">
+                    <canvas id="gameCanvas"></canvas>
+                    
+                    <!-- 勝利/結算畫面 -->
+                    <div id="win-overlay" class="overlay">
+                        <div class="bg-white/95 text-gray-800 p-8 rounded-2xl shadow-2xl text-center transform transition-all w-[85%] max-w-sm border border-white/50 backdrop-blur-sm">
+                            <div class="mb-4 relative inline-block">
+                                <div class="absolute inset-0 bg-yellow-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
+                                <i id="win-icon" class="fa-solid fa-trophy text-yellow-500 text-6xl relative z-10 drop-shadow-md"></i>
+                            </div>
+                            
+                            <h3 id="win-title" class="text-3xl font-black mb-2 bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-yellow-600">黑棋獲勝！</h3>
+                            <p id="win-message" class="text-gray-500 mb-8 font-medium">攻勢凌厲，勢如破竹！</p>
+                            
+                            <div class="space-y-3">
+                                <button onclick="resetGame()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-rotate-right"></i> 再戰一局
+                                </button>
+                                <button onclick="backToMenu()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-house"></i> 回主選單
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部控制按鈕 -->
+            <div class="w-full flex gap-3 mt-4">
+                <button onclick="undoMove()" class="flex-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold py-3 rounded-xl shadow-sm transition active:bg-gray-100 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate-left text-gray-400"></i> 悔棋
+                </button>
+                <button onclick="resetGame()" class="flex-1 bg-white hover:bg-gray-50 text-amber-600 border border-gray-200 font-bold py-3 rounded-xl shadow-sm transition active:bg-gray-100 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-arrows-rotate"></i> 重置盤面
                 </button>
             </div>
         </div>
 
-        <!-- 玩家狀態與標題 -->
-        <div class="w-full bg-white rounded-xl shadow-md p-3 mb-4 border border-gray-100">
-            <div class="text-center mb-2">
-                 <span id="game-title" class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded tracking-wide border border-amber-100">人機對戰 - 普通</span>
+        <!-- 右側：聊天室 (僅雙人模式顯示) -->
+        <div id="chat-panel" class="w-full lg:w-80 lg:h-[680px] hidden flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden mt-4 lg:mt-0 lg:sticky lg:top-4 transition-all duration-300">
+            <!-- 聊天室標題 -->
+            <div class="bg-indigo-600 text-white p-3 font-bold flex items-center gap-2 shadow-sm">
+                <i class="fa-regular fa-comments"></i> 雙人對戰聊天室
             </div>
             
-            <div class="flex justify-between items-center bg-gray-50 rounded-lg p-2">
-                <!-- 黑方 -->
-                <div id="player-indicator-black" class="flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent">
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="status-dot dot-black w-4 h-4"></span>
-                        <span class="font-bold text-gray-800">黑棋</span>
-                    </div>
-                    <span id="name-black" class="text-xs text-gray-500">玩家</span>
-                </div>
-
-                <!-- VS -->
-                <div class="px-4 text-gray-300 font-black italic text-xl">VS</div>
-
-                <!-- 白方 -->
-                <div id="player-indicator-white" class="flex-1 flex flex-col items-center py-2 rounded-md transition-all duration-300 border-2 border-transparent">
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="status-dot dot-white w-4 h-4"></span>
-                        <span class="font-bold text-gray-800">白棋</span>
-                    </div>
-                    <span id="name-white" class="text-xs text-gray-500">AI</span>
-                </div>
+            <!-- 訊息列表 -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-gray-50 space-y-3 flex flex-col h-[300px] lg:h-auto">
+                <div class="text-center text-xs text-gray-400 my-2">-- 遊戲開始，可以打字交流喔 --</div>
             </div>
-        </div>
-
-        <!-- 棋盤區域 -->
-        <div class="board-wrapper">
-            <div class="board-container" id="board-container">
-                <canvas id="gameCanvas"></canvas>
+            
+            <!-- 輸入區 -->
+            <div class="p-3 bg-white border-t border-gray-200">
+                <input type="text" id="chat-input" class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="輸入訊息..." onkeypress="handleChatEnter(event)">
                 
-                <!-- 勝利/結算畫面 -->
-                <div id="win-overlay" class="overlay">
-                    <div class="bg-white/95 text-gray-800 p-8 rounded-2xl shadow-2xl text-center transform transition-all w-[85%] max-w-sm border border-white/50 backdrop-blur-sm">
-                        <div class="mb-4 relative inline-block">
-                             <div class="absolute inset-0 bg-yellow-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
-                             <i id="win-icon" class="fa-solid fa-trophy text-yellow-500 text-6xl relative z-10 drop-shadow-md"></i>
-                        </div>
-                        
-                        <h3 id="win-title" class="text-3xl font-black mb-2 bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-yellow-600">黑棋獲勝！</h3>
-                        <p id="win-message" class="text-gray-500 mb-8 font-medium">攻勢凌厲，勢如破竹！</p>
-                        
-                        <div class="space-y-3">
-                            <button onclick="resetGame()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-rotate-right"></i> 再戰一局
-                            </button>
-                            <button onclick="backToMenu()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-house"></i> 回主選單
-                            </button>
-                        </div>
-                    </div>
+                <div class="flex gap-2">
+                    <button onclick="sendChat('black')" class="flex-1 bg-gray-800 hover:bg-black text-white text-sm font-bold py-2 rounded-lg transition shadow-sm flex items-center justify-center gap-1">
+                        <span class="w-3 h-3 rounded-full bg-black border border-gray-500"></span> 黑棋說
+                    </button>
+                    <button onclick="sendChat('white')" class="flex-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 text-sm font-bold py-2 rounded-lg transition shadow-sm flex items-center justify-center gap-1">
+                        <span class="w-3 h-3 rounded-full bg-white border border-gray-400"></span> 白棋說
+                    </button>
                 </div>
             </div>
-        </div>
-
-        <!-- 底部控制按鈕 -->
-        <div class="w-full flex gap-3 mt-4">
-             <button onclick="undoMove()" class="flex-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold py-3 rounded-xl shadow-sm transition active:bg-gray-100 flex items-center justify-center gap-2">
-                <i class="fa-solid fa-rotate-left text-gray-400"></i> 悔棋
-            </button>
-            <button onclick="resetGame()" class="flex-1 bg-white hover:bg-gray-50 text-amber-600 border border-gray-200 font-bold py-3 rounded-xl shadow-sm transition active:bg-gray-100 flex items-center justify-center gap-2">
-                <i class="fa-solid fa-arrows-rotate"></i> 重置盤面
-            </button>
         </div>
 
     </div>
@@ -373,27 +377,22 @@
         const BLACK = 1;
         const WHITE = 2;
         
-        // 核心變數
         let canvas, ctx;
         let board = [];
         let currentPlayer = BLACK;
         let isGameActive = false;
         let moveHistory = []; 
-        
-        // UI 與 繪圖參數
         let cellSize = 0;
         let padding = 0; 
         let showMoveNumbers = false;
         let soundEnabled = true;
 
-        // 遊戲模式設定
         let gameSettings = {
             mode: 'pve', 
             aiDiff: 'medium', 
             playerColor: BLACK 
         };
 
-        // 音效 Context
         let audioCtx = null;
 
         /**
@@ -407,7 +406,6 @@
             canvas.addEventListener('mousedown', handleInput);
             canvas.addEventListener('touchstart', handleInput, {passive: false});
 
-            // 初始狀態
             updateMenuUi();
         };
 
@@ -418,7 +416,7 @@
         }
 
         /**
-         * 音效生成系統
+         * 音效與聊天功能
          */
         function playSound(type) {
             if (!soundEnabled || !audioCtx) return;
@@ -426,10 +424,8 @@
 
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-            
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-
             const now = audioCtx.currentTime;
 
             if (type === 'move') {
@@ -438,6 +434,15 @@
                 osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
                 gainNode.gain.setValueAtTime(0.3, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'chat') {
+                // 聊天音效：輕微的氣泡聲
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.linearRampToValueAtTime(800, now + 0.05);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
                 osc.start(now);
                 osc.stop(now + 0.1);
             } else if (type === 'win') {
@@ -461,12 +466,10 @@
             const gain = audioCtx.createGain();
             osc.connect(gain);
             gain.connect(audioCtx.destination);
-            
             const now = audioCtx.currentTime + delay;
             osc.frequency.value = freq;
             gain.gain.setValueAtTime(0.2, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-            
             osc.start(now);
             osc.stop(now + duration);
         }
@@ -483,6 +486,61 @@
                 btn.classList.add('text-gray-400');
                 btn.classList.remove('text-gray-600', 'hover:text-blue-600');
             }
+        }
+
+        // 聊天室功能
+        function handleChatEnter(e) {
+            if (e.key === 'Enter') {
+                // 預設 Enter 視為目前回合者發言，或隨機？這裡設定預設為黑方，或強迫點按鈕
+                // 為了避免混淆，Enter 預設以當前輸入框內的內容觸發，但我們需要知道是誰
+                // 這裡簡單設計：Enter 觸發「黑棋說」
+                sendChat('black');
+            }
+        }
+
+        function sendChat(role) {
+            const input = document.getElementById('chat-input');
+            const msgText = input.value.trim();
+            if (!msgText) return;
+
+            const chatBox = document.getElementById('chat-messages');
+            const msgDiv = document.createElement('div');
+            
+            // 根據角色決定樣式 (黑棋在右，白棋在左)
+            // 黑棋訊息 (像自己發出的)
+            if (role === 'black') {
+                msgDiv.className = "flex justify-end";
+                msgDiv.innerHTML = `
+                    <div class="max-w-[80%]">
+                        <div class="text-[10px] text-gray-500 text-right mb-0.5">黑棋</div>
+                        <div class="bg-gray-800 text-white rounded-l-lg rounded-tr-lg rounded-br-none py-2 px-3 text-sm shadow-sm break-words">
+                            ${escapeHtml(msgText)}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // 白棋訊息 (像對方發出的)
+                msgDiv.className = "flex justify-start";
+                msgDiv.innerHTML = `
+                    <div class="max-w-[80%]">
+                        <div class="text-[10px] text-gray-500 text-left mb-0.5">白棋</div>
+                        <div class="bg-white border border-gray-200 text-gray-800 rounded-r-lg rounded-tl-lg rounded-bl-none py-2 px-3 text-sm shadow-sm break-words">
+                            ${escapeHtml(msgText)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            input.value = "";
+            playSound('chat');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         /**
@@ -513,8 +571,18 @@
             document.getElementById('menu-screen').classList.add('hidden-screen');
             document.getElementById('game-screen').classList.add('visible');
             
+            // 處理聊天室顯示
+            const chatPanel = document.getElementById('chat-panel');
+            if (mode === 'pvp') {
+                chatPanel.classList.remove('hidden');
+                chatPanel.classList.add('flex');
+            } else {
+                chatPanel.classList.add('hidden');
+                chatPanel.classList.remove('flex');
+            }
+
             updateGameHeader();
-            handleResize();
+            handleResize(); // 重新計算大小，因為容器寬度變了
             initBoard();
         }
 
@@ -566,6 +634,10 @@
             
             updateTurnIndicator();
             document.getElementById('win-overlay').classList.remove('active');
+            
+            // 清空聊天記錄
+            document.getElementById('chat-messages').innerHTML = '<div class="text-center text-xs text-gray-400 my-2">-- 遊戲開始，可以打字交流喔 --</div>';
+            
             drawBoard();
 
             if (gameSettings.mode === 'pve') {
