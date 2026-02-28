@@ -9,12 +9,10 @@
     <style>
         body {
             background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
-            /* 使用 dvh 解決手機瀏覽器上下工具列遮擋問題 */
             height: 100dvh; 
             margin: 0;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            /* 絕對禁止系統預設滑動與縮放 */
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
@@ -47,6 +45,7 @@
             overflow-y: auto;
             border: 2px solid #fff;
             min-width: 160px;
+            z-index: 10;
         }
 
         .guide-title {
@@ -83,11 +82,11 @@
             gap: 10px;
             height: 100%;
             width: 100%;
-            max-width: 500px; /* 限制最大寬度，避免電腦螢幕過寬 */
+            max-width: 500px; 
             justify-content: center;
         }
 
-        /* 獨立頂部 UI 區塊 (不擋畫面) */
+        /* 獨立頂部 UI 區塊 */
         #top-ui-bar {
             display: flex;
             justify-content: space-between;
@@ -95,6 +94,7 @@
             gap: 10px;
             width: 100%;
             flex-shrink: 0;
+            z-index: 10;
         }
 
         .status-box {
@@ -120,7 +120,6 @@
         #game-wrapper {
             position: relative;
             width: 100%;
-            /* 讓高度自動填滿剩餘空間，但保持最大比例限制 */
             flex-grow: 1;
             min-height: 0; 
             background-color: #ffe8cc;
@@ -128,16 +127,15 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
             overflow: hidden;
             border: 4px solid #fff;
-            /* 強制設定觸控行為給 JS 處理 */
             touch-action: none; 
-            cursor: pointer;
+            cursor: crosshair;
         }
 
         canvas {
             display: block;
             width: 100% !important;
             height: 100% !important;
-            object-fit: contain; /* 確保畫布內容在響應式下比例正確 */
+            object-fit: contain; 
         }
 
         #ui-layer {
@@ -167,43 +165,25 @@
             z-index: 50;
         }
 
-        /* 手機板特製響應式 (RWD) */
         @media (max-width: 768px) {
-            #main-layout { 
-                flex-direction: column; 
-                padding: 10px; 
-                gap: 8px;
-            }
-            /* 將圖鑑變成橫向滾動的小條，節省空間 */
+            #main-layout { flex-direction: column; padding: 10px; gap: 8px; }
             #guide-panel {
-                flex-direction: row; 
-                width: 100%; 
-                overflow-x: auto; 
-                padding: 8px; 
-                border-radius: 12px;
-                min-width: 0; /* 覆蓋原本設定 */
+                flex-direction: row; width: 100%; overflow-x: auto; padding: 8px; border-radius: 12px; min-width: 0;
             }
             .guide-title, .guide-item span { display: none; }
             .guide-item { padding: 4px; }
-            
-            #game-column {
-                height: 0; /* 讓 flex-grow 生效 */
-                flex-grow: 1;
-            }
+            #game-column { height: 0; flex-grow: 1; }
         }
     </style>
 </head>
 <body>
 
 <div id="main-layout">
-    <!-- 左側進化圖鑑 (手機版會變成上方橫列) -->
     <div id="guide-panel">
         <div class="guide-title">進化圖鑑</div>
-        <!-- 內容由 JS 自動產生 -->
     </div>
 
     <div id="game-column">
-        <!-- 頂部狀態列 -->
         <div id="top-ui-bar">
             <div class="status-box">
                 <div class="next-preview-title">NEXT</div>
@@ -215,7 +195,6 @@
             </div>
         </div>
 
-        <!-- 遊戲主畫面 -->
         <div id="game-wrapper">
             <div id="ui-layer"></div>
             
@@ -225,7 +204,7 @@
                     <p class="text-xs font-bold text-gray-400 mb-1">FINAL SCORE</p>
                     <p id="final-score" class="text-4xl font-black text-red-500">0</p>
                 </div>
-                <button id="restart-btn" class="px-8 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full font-black text-lg shadow-lg active:scale-95 transition-transform">
+                <button id="restart-btn" class="px-8 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full font-black text-lg shadow-lg active:scale-95 transition-transform z-50">
                     再來一局
                 </button>
             </div>
@@ -234,7 +213,7 @@
 </div>
 
 <script>
-    // --- 1. 遊戲設定與資料庫 ---
+    // --- 1. 遊戲設定 ---
     const BALLS = [
         { level: 0, radius: 18, color: '#ff7b7b', emoji: '🍒', name: '櫻桃' },
         { level: 1, radius: 26, color: '#ffb347', emoji: '🍊', name: '橘子' },
@@ -272,7 +251,6 @@
         floatingTexts.push({ x: x, y: y, text: text, life: 1.0, vy: -2, color: color });
     }
 
-    // --- 渲染左側圖鑑 ---
     const guidePanel = document.getElementById('guide-panel');
     BALLS.forEach(ball => {
         const item = document.createElement('div');
@@ -292,7 +270,7 @@
 
     let engine = Engine.create();
     let world = engine.world;
-    engine.world.gravity.y = 0.7; // 調整重力讓手感更紮實
+    engine.world.gravity.y = 0.7; 
 
     let render = Render.create({
         element: document.getElementById('game-wrapper'),
@@ -312,7 +290,6 @@
     let currentBallLevel = 0;
     let nextBallLevel = 0;
     
-    // 【新增】觸控與瞄準狀態
     let isAiming = false; 
     let logicalMouseX = GAME_WIDTH / 2; 
 
@@ -391,7 +368,6 @@
 
     // --- 5. 事件監聽 (連鎖防卡死與合併) ---
     Events.on(engine, 'collisionStart', (event) => {
-        // 【防卡死機制】按照高度(Y)由低到高排序，確保連鎖時優先往下合成
         event.pairs.sort((a, b) => {
             const yA = Math.max(a.bodyA.position.y, a.bodyB.position.y);
             const yB = Math.max(b.bodyA.position.y, b.bodyB.position.y);
@@ -412,7 +388,6 @@
                     const lowerBody = bodyA.position.y > bodyB.position.y ? bodyA : bodyB;
                     const higherBody = bodyA.position.y > bodyB.position.y ? bodyB : bodyA;
                     
-                    // 新球位置偏向下方的球 (防卡死機制)
                     const midX = (bodyA.position.x + bodyB.position.x) / 2;
                     const midY = (lowerBody.position.y * 0.75 + higherBody.position.y * 0.25);
                     const newBallInfo = BALLS[nextLevel];
@@ -505,9 +480,10 @@
         context.beginPath(); context.moveTo(0, GAME_OVER_LINE_Y); context.lineTo(GAME_WIDTH, GAME_OVER_LINE_Y);
         context.strokeStyle = 'rgba(255, 100, 100, 0.6)'; context.lineWidth = 3; context.setLineDash([15, 10]); context.stroke(); context.setLineDash([]); 
 
-        // 畫出「正在瞄準」的球 (有按住或在電腦版可以一直顯示)
-        if (canDrop && !isGameOver && isAiming) {
+        // 【修改】不管有沒有點擊，永遠顯示上方待掉落的水果！
+        if (canDrop && !isGameOver) {
             const ballInfo = BALLS[currentBallLevel];
+            // SafeX 已經限制了水果絕對不會超出左右牆壁
             const safeX = Math.max(ballInfo.radius, Math.min(GAME_WIDTH - ballInfo.radius, logicalMouseX));
             
             context.globalAlpha = 0.8;
@@ -522,43 +498,38 @@
         }
     });
 
-    // --- 7. 【全新】互動控制：按住移動、放開掉落 ---
+    // --- 7. 【終極輸入控制】綁定整個 document，支援邊界外容錯與永遠跟隨 ---
     const canvasEl = render.canvas;
-    const wrapper = document.getElementById('game-wrapper');
 
     function updateLogicalX(e) {
+        if (isGameOver) return;
         const rect = canvasEl.getBoundingClientRect();
-        // 統一處理滑鼠與觸控的座標
-        let clientX = e.clientX; 
-        if (e.touches && e.touches.length > 0) clientX = e.touches[0].clientX;
-        else if (e.changedTouches && e.changedTouches.length > 0) clientX = e.changedTouches[0].clientX;
-        
+        // PointerEvent 直接內建 clientX，無縫支援滑鼠與觸控
         const scaleX = GAME_WIDTH / rect.width;
-        logicalMouseX = (clientX - rect.left) * scaleX;
+        logicalMouseX = (e.clientX - rect.left) * scaleX;
     }
 
-    // 使用 Pointer Events 完美整合滑鼠與觸控
-    wrapper.addEventListener('pointerdown', (e) => {
-        if (!canDrop || isGameOver || e.target.id === 'restart-btn') return;
+    // 監聽全螢幕滑動 (保留 PC 滑鼠永遠跟隨的體驗)
+    document.addEventListener('pointermove', (e) => {
+        updateLogicalX(e);
+    });
+
+    document.addEventListener('pointerdown', (e) => {
+        // 避免點擊 UI 觸發掉落
+        if (e.target.closest('#restart-btn') || e.target.closest('#guide-panel') || e.target.closest('#top-ui-bar')) return;
+        if (!canDrop || isGameOver) return;
         isAiming = true;
         updateLogicalX(e);
     });
 
-    wrapper.addEventListener('pointermove', (e) => {
+    document.addEventListener('pointerup', (e) => {
         if (!isAiming || !canDrop || isGameOver) return;
-        updateLogicalX(e);
-    });
-
-    wrapper.addEventListener('pointerup', (e) => {
-        if (!isAiming || !canDrop || isGameOver) return;
-        updateLogicalX(e); // 確保放開時是最終位置
+        updateLogicalX(e); 
         isAiming = false;
-        dropBall(); // 放開手指，球才掉落！
+        dropBall(); // 放開手指才掉落！
     });
     
-    // 如果手指滑出螢幕外取消
-    wrapper.addEventListener('pointercancel', () => { isAiming = false; });
-
+    document.addEventListener('pointercancel', () => { isAiming = false; });
     document.getElementById('restart-btn').addEventListener('click', resetGame);
 
     nextBallLevel = getRandomSpawnLevel();
