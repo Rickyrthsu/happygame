@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>進化西瓜！合成圓球遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            touch-action: none;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #main-layout {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* 左側圖鑑面板 */
+        #guide-panel {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 2px solid #fff;
+            min-width: 160px;
+        }
+
+        .guide-title {
+            text-align: center;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+            border-bottom: 2px dashed #eee;
+            padding-bottom: 8px;
+        }
+
+        .guide-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 10px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            transition: transform 0.2s;
+        }
+        .guide-item:hover { transform: scale(1.05); }
+
+        .guide-icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            box-shadow: inset -2px -2px 6px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* 遊戲與 UI 的欄位 */
+        #game-column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 95vh;
+            max-height: 850px;
+            width: 100%;
+            max-width: 550px; /* 加寬遊戲主介面的最大寬度限制 */
+        }
+
+        /* 獨立頂部 UI 區塊 (不擋畫面) */
+        #top-ui-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .status-box {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 20px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+            border: 2px solid #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+        }
+
+        /* 左邊：下一個 */
+        .next-preview-title { font-size: 0.8rem; color: #888; font-weight: bold; margin-bottom: 5px; }
+        #next-ball-preview { font-size: 2.2rem; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.1)); }
+
+        /* 右邊：分數 */
+        .high-score-text { font-size: 0.75rem; color: #aaa; margin-bottom: 2px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .current-score { font-size: 1.6rem; font-weight: 900; color: #ff5252; display: flex; align-items: center; gap: 5px; }
+
+        /* 遊戲區域容器 */
+        #game-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            background-color: #ffe8cc;
+            border-radius: 25px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+            overflow: hidden;
+            border: 4px solid #fff;
+            transition: transform 0.1s;
+        }
+
+        /* 畫面震動特效 */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(0px, 0px) rotate(0deg); }
+        }
+        .shake { animation: shake 0.3s; }
+
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(6px);
+            transform: scale(1.1);
+        }
+
+        #game-over-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 50;
+            transform: scale(1);
+        }
+
+        @media (max-width: 600px) {
+            #main-layout { flex-direction: column; gap: 10px; padding: 10px; }
+            #guide-panel {
+                flex-direction: row; max-width: 100%; overflow-x: auto; padding: 10px; min-height: 70px;
+            }
+            .guide-title, .guide-item span { display: none; }
+            #game-column { height: 85vh; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="main-layout">
+    <!-- 左側進化圖鑑 -->
+    <div id="guide-panel">
+        <div class="guide-title">進化圖鑑</div>
+        <!-- 內容由 JS 自動產生 -->
+    </div>
+
+    <div id="game-column">
+        <!-- 頂部狀態列 (不會擋住遊戲) -->
+        <div id="top-ui-bar">
+            <!-- 左邊：下一個 -->
+            <div class="status-box">
+                <div class="next-preview-title">NEXT</div>
+                <div id="next-ball-preview">❓</div>
+            </div>
+            
+            <!-- 右邊：紀錄與分數 -->
+            <div class="status-box">
+                <div class="high-score-text">BEST: <span id="high-score">0</span></div>
+                <div class="current-score">🏆 <span id="score">0</span></div>
+            </div>
+        </div>
+
+        <!-- 遊戲主畫面 -->
+        <div id="game-wrapper">
+            <!-- 畫布與結束畫面 -->
+            <div id="ui-layer"></div>
+            
+            <div id="game-over-screen">
+                <h1 class="text-5xl font-black mb-2 text-white drop-shadow-[0_0_15px_rgba(255,100,100,0.8)]">GAME OVER</h1>
+                <p class="text-lg mb-8 text-gray-300 font-bold tracking-wider">差一點點就能合成了！</p>
+                <div class="bg-white text-gray-800 px-10 py-5 rounded-3xl mb-8 shadow-2xl text-center transform rotate-2">
+                    <p class="text-sm font-bold text-gray-400 mb-1">FINAL SCORE</p>
+                    <p id="final-score" class="text-5xl font-black text-red-500">0</p>
+                </div>
+                <button id="restart-btn" class="px-10 py-4 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-400 hover:to-pink-400 text-white rounded-full font-black text-xl shadow-[0_10px_25px_rgba(255,100,100,0.5)] transition-all transform hover:scale-110 active:scale-95">
+                    再來一局
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. 遊戲設定與資料庫 ---
+    const BALLS = [
+        { level: 0, radius: 16, color: '#ff7b7b', emoji: '🍒', name: '櫻桃' },
+        { level: 1, radius: 24, color: '#ffb347', emoji: '🍊', name: '橘子' },
+        { level: 2, radius: 34, color: '#ffdf00', emoji: '🍋', name: '檸檬' },
+        { level: 3, radius: 46, color: '#88d8b0', emoji: '🥝', name: '奇異果' },
+        { level: 4, radius: 58, color: '#ff9a9e', emoji: '🍅', name: '番茄' },
+        { level: 5, radius: 72, color: '#ff6a88', emoji: '🍎', name: '蘋果' },
+        { level: 6, radius: 86, color: '#f6e58d', emoji: '🍐', name: '梨子' },
+        { level: 7, radius: 102, color: '#f8a5c2', emoji: '🍑', name: '水蜜桃' },
+        { level: 8, radius: 120, color: '#f9ca24', emoji: '🍍', name: '鳳梨' },
+        { level: 9, radius: 140, color: '#badc58', emoji: '🍈', name: '哈密瓜' },
+        { level: 10, radius: 160, color: '#6ab04c', emoji: '🍉', name: '大西瓜' }
+    ];
+
+    // 調整物理世界的寬度與高度，讓畫面變寬！
+    const GAME_WIDTH = 500; 
+    const GAME_HEIGHT = 750;
+    const GAME_OVER_LINE_Y = 120; 
+    const DROP_Y = 40; 
+
+    // --- 視覺回饋系統 (特效粒子與飄浮字) ---
+    let particles = [];
+    let floatingTexts = [];
+
+    function spawnParticles(x, y, color, count) {
+        for(let i = 0; i < count; i++) {
+            particles.push({
+                x: x, y: y,
+                vx: (Math.random() - 0.5) * 12,
+                vy: (Math.random() - 0.5) * 12,
+                life: 1.0,
+                color: color,
+                size: Math.random() * 5 + 3
+            });
+        }
+    }
+
+    function spawnFloatingText(x, y, text, color) {
+        floatingTexts.push({
+            x: x, y: y,
+            text: text,
+            life: 1.0,
+            vy: -2,
+            color: color
+        });
+    }
+
+    // --- 1.5 渲染左側圖鑑 ---
+    const guidePanel = document.getElementById('guide-panel');
+    BALLS.forEach(ball => {
+        const item = document.createElement('div');
+        item.className = 'guide-item';
+        const iconSize = 20 + ball.level * 2; 
+        item.innerHTML = `
+            <div class="guide-icon" style="background-color: ${ball.color}; width: ${iconSize}px; height: ${iconSize}px; font-size: ${iconSize * 0.6}px;">
+                ${ball.emoji}
+            </div>
+            <span class="text-sm font-bold text-gray-700">${ball.name}</span>
+        `;
+        guidePanel.appendChild(item);
+    });
+
+    // --- 2. 物理引擎初始化 (Matter.js) ---
+    const Engine = Matter.Engine,
+          Render = Matter.Render,
+          Runner = Matter.Runner,
+          Bodies = Matter.Bodies,
+          Composite = Matter.Composite,
+          Events = Matter.Events;
+
+    let engine = Engine.create();
+    let world = engine.world;
+    engine.world.gravity.y = 0.6; // 稍微放慢的漂浮感重力
+
+    let render = Render.create({
+        element: document.getElementById('game-wrapper'),
+        engine: engine,
+        options: {
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+            wireframes: false, 
+            background: 'transparent'
+        }
+    });
+
+    Render.run(render);
+    let runner = Runner.create();
+    Runner.run(runner, engine);
+
+    // --- 3. 遊戲狀態與變數 ---
+    let score = 0;
+    let highScore = localStorage.getItem('suikaHighScore') || 0;
+    let isGameOver = false;
+    let canDrop = true; 
+    let currentBallLevel = 0;
+    let nextBallLevel = 0;
+    let logicalMouseX = GAME_WIDTH / 2; 
+
+    document.getElementById('high-score').innerText = highScore;
+
+    const wallOptions = { isStatic: true, render: { visible: false } };
+    const ground = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT + 90, GAME_WIDTH * 2, 200, wallOptions);
+    const leftWall = Bodies.rectangle(-50, GAME_HEIGHT / 2, 100, GAME_HEIGHT * 3, wallOptions);
+    const rightWall = Bodies.rectangle(GAME_WIDTH + 50, GAME_HEIGHT / 2, 100, GAME_HEIGHT * 3, wallOptions);
+    Composite.add(world, [ground, leftWall, rightWall]);
+
+    // --- 4. 核心邏輯 ---
+    function getRandomSpawnLevel() {
+        return Math.floor(Math.random() * 4); 
+    }
+
+    function prepareNextBall() {
+        currentBallLevel = nextBallLevel;
+        nextBallLevel = getRandomSpawnLevel();
+        // 加入進場小動畫效果
+        const preview = document.getElementById('next-ball-preview');
+        preview.style.transform = 'scale(0.1)';
+        preview.innerText = BALLS[nextBallLevel].emoji;
+        setTimeout(() => preview.style.transform = 'scale(1)', 50);
+        preview.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        canDrop = true;
+    }
+
+    function dropBall() {
+        if (!canDrop || isGameOver) return;
+        canDrop = false;
+
+        const ballInfo = BALLS[currentBallLevel];
+        const safeX = Math.max(ballInfo.radius, Math.min(GAME_WIDTH - ballInfo.radius, logicalMouseX));
+
+        const body = Bodies.circle(safeX, DROP_Y, ballInfo.radius, {
+            restitution: 0.25,
+            friction: 0.5,    
+            frictionAir: 0.015,
+            density: 0.005 + (currentBallLevel * 0.001), 
+            render: { visible: false }, // 關閉預設渲染，我們要自訂帶有動畫的渲染
+            label: 'circle',
+            level: currentBallLevel, 
+            isMerging: false,
+            renderScale: 1 // 用於自訂畫面的縮放動畫
+        });
+
+        Composite.add(world, body);
+        setTimeout(() => { if(!isGameOver) prepareNextBall(); }, 700);
+    }
+
+    function updateScore(add) {
+        score += add;
+        const scoreEl = document.getElementById('score');
+        scoreEl.innerText = score;
+        
+        // 觸發分數跳動特效
+        scoreEl.style.transform = 'scale(1.5)';
+        scoreEl.style.color = '#ff9f43';
+        setTimeout(() => {
+            scoreEl.style.transform = 'scale(1)';
+            scoreEl.style.color = '#ff5252';
+            scoreEl.style.transition = 'all 0.3s';
+        }, 150);
+        
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('suikaHighScore', highScore);
+            document.getElementById('high-score').innerText = highScore;
+        }
+    }
+
+    function triggerGameOver() {
+        isGameOver = true;
+        canDrop = false;
+        document.getElementById('game-over-screen').classList.add('active');
+        document.getElementById('final-score').innerText = score;
+    }
+
+    function resetGame() {
+        const bodies = Composite.allBodies(world).filter(b => b.label === 'circle');
+        Composite.remove(world, bodies);
+        score = 0;
+        updateScore(0);
+        isGameOver = false;
+        particles = [];
+        floatingTexts = [];
+        document.getElementById('game-over-screen').classList.remove('active');
+        nextBallLevel = getRandomSpawnLevel();
+        prepareNextBall();
+    }
+
+    // --- 5. 事件監聽 (帶有極致回饋的碰撞合成) ---
+    Events.on(engine, 'collisionStart', (event) => {
+        // 【關鍵解法 1】將同幀內的碰撞事件依照 Y 軸座標 (越下方 Y 越大) 進行降冪排序
+        // 這樣可以確保連鎖反應發生時，永遠優先「往下」合併，解決小球被壓在下面的卡頓感
+        event.pairs.sort((a, b) => {
+            const yA = Math.max(a.bodyA.position.y, a.bodyB.position.y);
+            const yB = Math.max(b.bodyA.position.y, b.bodyB.position.y);
+            return yB - yA;
+        });
+
+        event.pairs.forEach((collision) => {
+            const bodyA = collision.bodyA;
+            const bodyB = collision.bodyB;
+
+            if (bodyA.label === 'circle' && bodyB.label === 'circle' && bodyA.level === bodyB.level) {
+                if (bodyA.isMerging || bodyB.isMerging) return;
+                
+                bodyA.isMerging = true;
+                bodyB.isMerging = true;
+
+                const currentLevel = bodyA.level;
+                const nextLevel = currentLevel + 1;
+
+                if (nextLevel < BALLS.length) {
+                    // 【關鍵解法 2】找出兩顆球中位置較低的那顆
+                    const lowerBody = bodyA.position.y > bodyB.position.y ? bodyA : bodyB;
+                    const higherBody = bodyA.position.y > bodyB.position.y ? bodyB : bodyA;
+
+                    // 讓新球生成的 Y 座標稍微偏向「下方」那顆球 (75% 權重)
+                    // 這樣新球生出來時，物理上會離下面的球更近，更容易觸發向下的連鎖合成
+                    const midX = (bodyA.position.x + bodyB.position.x) / 2;
+                    const midY = (lowerBody.position.y * 0.75 + higherBody.position.y * 0.25);
+                    const newBallInfo = BALLS[nextLevel];
+
+                    // 分數回饋與文字特效
+                    const scoreGained = (nextLevel + 1) * 15;
+                    updateScore(scoreGained);
+                    spawnFloatingText(midX, midY, `+${scoreGained}`, '#ff5252');
+                    
+                    // 粒子果汁噴濺特效
+                    spawnParticles(midX, midY, newBallInfo.color, 20 + nextLevel * 5);
+
+                    // 如果合成較大的水果，引發「畫面震動」的回饋感！
+                    if (nextLevel >= 4) {
+                        const wrapper = document.getElementById('game-wrapper');
+                        wrapper.classList.remove('shake');
+                        void wrapper.offsetWidth; // 觸發重繪
+                        wrapper.classList.add('shake');
+                    }
+
+                    // 創造新球 (帶有放大動畫)
+                    const newBody = Bodies.circle(midX, midY, newBallInfo.radius, {
+                        restitution: 0.25,
+                        friction: 0.5,
+                        frictionAir: 0.015,
+                        density: 0.005 + (nextLevel * 0.001),
+                        render: { visible: false }, // 關閉預設
+                        label: 'circle',
+                        level: nextLevel,
+                        isMerging: false,
+                        renderScale: 0.1 // 動畫：從極小開始長大 (減緩合成突兀感)
+                    });
+
+                    Composite.remove(world, [bodyA, bodyB]);
+                    Composite.add(world, newBody);
+                }
+            }
+        });
+    });
+
+    Events.on(engine, 'afterUpdate', () => {
+        if (isGameOver) return;
+        const bodies = Composite.allBodies(world);
+        for (let i = 0; i < bodies.length; i++) {
+            const body = bodies[i];
+            
+            // 處理「漸漸長大」的動畫邏輯
+            if (body.renderScale !== undefined && body.renderScale < 1) {
+                // 彈簧/彈性過渡公式
+                body.renderScale += (1.05 - body.renderScale) * 0.15; 
+            }
+
+            // 死亡判定
+            if (body.label === 'circle' && (body.position.y - BALLS[body.level].radius) < GAME_OVER_LINE_Y) {
+                if (Math.abs(body.velocity.y) < 0.1 && Math.abs(body.velocity.x) < 0.1 && body.renderScale >= 1) {
+                    triggerGameOver();
+                    break;
+                }
+            }
+        }
+    });
+
+    // --- 6. 自訂終極渲染 (掌控所有視覺細節) ---
+    Events.on(render, 'afterRender', () => {
+        const context = render.context;
+
+        // 畫出所有帶有縮放動畫的球
+        const bodies = Composite.allBodies(world);
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        
+        bodies.forEach(body => {
+            if (body.label === 'circle' && body.level !== undefined) {
+                const ballInfo = BALLS[body.level];
+                const scale = body.renderScale || 1;
+                
+                context.save();
+                context.translate(body.position.x, body.position.y);
+                context.scale(scale, scale); // 賦予彈跳生長感
+                context.rotate(body.angle);  // 讓 Emoji 隨著物理轉動！
+
+                // 實體底色與陰影
+                context.beginPath();
+                context.arc(0, 0, ballInfo.radius, 0, 2 * Math.PI);
+                context.fillStyle = ballInfo.color;
+                context.fill();
+                
+                context.lineWidth = 3;
+                context.strokeStyle = 'rgba(255,255,255,0.4)';
+                context.stroke();
+                
+                // 內部立體陰影
+                context.beginPath();
+                context.arc(0, 0, ballInfo.radius - 2, 0, 2 * Math.PI);
+                context.lineWidth = 4;
+                context.strokeStyle = 'rgba(0,0,0,0.08)';
+                context.stroke();
+
+                // 畫 Emoji (抵抗物理引擎倒轉，保持 Emoji 正向，或允許轉動看個人喜好。這裡設計為跟著轉增加趣味)
+                context.font = `bold ${ballInfo.radius * 1.1}px Arial`;
+                context.fillStyle = '#000';
+                context.fillText(ballInfo.emoji, 0, ballInfo.radius * 0.05);
+                
+                context.restore();
+            }
+        });
+
+        // 畫粒子特效
+        particles.forEach(p => {
+            p.x += p.vx; 
+            p.y += p.vy; 
+            p.vy += 0.5; // 粒子重力
+            p.life -= 0.03;
+            if (p.life > 0) {
+                context.globalAlpha = p.life;
+                context.fillStyle = p.color;
+                context.beginPath();
+                context.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
+                context.fill();
+            }
+        });
+        particles = particles.filter(p => p.life > 0);
+        context.globalAlpha = 1.0;
+
+        // 畫飄浮分數
+        floatingTexts.forEach(ft => {
+            ft.y += ft.vy;
+            ft.life -= 0.02;
+            if (ft.life > 0) {
+                context.globalAlpha = ft.life;
+                context.font = 'bold 24px Arial';
+                context.fillStyle = ft.color;
+                context.strokeStyle = '#fff';
+                context.lineWidth = 3;
+                context.strokeText(ft.text, ft.x, ft.y);
+                context.fillText(ft.text, ft.x, ft.y);
+            }
+        });
+        floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+        context.globalAlpha = 1.0;
+
+        // 畫死亡紅線
+        context.beginPath();
+        context.moveTo(0, GAME_OVER_LINE_Y);
+        context.lineTo(GAME_WIDTH, GAME_OVER_LINE_Y);
+        context.strokeStyle = 'rgba(255, 100, 100, 0.6)';
+        context.lineWidth = 3;
+        context.setLineDash([15, 10]); 
+        context.stroke();
+        context.setLineDash([]); 
+
+        // 畫待發射的球 (具有透明度，輔助瞄準)
+        if (canDrop && !isGameOver) {
+            const ballInfo = BALLS[currentBallLevel];
+            const safeX = Math.max(ballInfo.radius, Math.min(GAME_WIDTH - ballInfo.radius, logicalMouseX));
+            
+            context.globalAlpha = 0.8;
+            context.beginPath();
+            context.arc(safeX, DROP_Y, ballInfo.radius, 0, 2 * Math.PI);
+            context.fillStyle = ballInfo.color;
+            context.fill();
+            context.lineWidth = 2;
+            context.strokeStyle = '#fff';
+            context.stroke();
+            
+            context.font = `${ballInfo.radius * 1.1}px Arial`;
+            context.fillText(ballInfo.emoji, safeX, DROP_Y + (ballInfo.radius * 0.05));
+            context.globalAlpha = 1.0;
+            
+            // 下方虛線
+            context.beginPath();
+            context.moveTo(safeX, DROP_Y + ballInfo.radius);
+            context.lineTo(safeX, GAME_HEIGHT);
+            context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            context.lineWidth = 2;
+            context.setLineDash([8, 8]);
+            context.stroke();
+            context.setLineDash([]);
+        }
+    });
+
+    // --- 7. 玩家輸入控制 ---
+    const canvasEl = render.canvas;
+
+    function handleMove(e) {
+        if (!canDrop || isGameOver) return;
+        let clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+        const rect = canvasEl.getBoundingClientRect();
+        const scaleX = GAME_WIDTH / rect.width;
+        logicalMouseX = (clientX - rect.left) * scaleX;
+    }
+
+    function handleDrop(e) {
+        if (e.target.id === 'restart-btn') return;
+        handleMove(e); 
+        dropBall();
+    }
+
+    const wrapper = document.getElementById('game-wrapper');
+    wrapper.addEventListener('mousemove', handleMove);
+    wrapper.addEventListener('touchmove', handleMove, { passive: true });
+    wrapper.addEventListener('mousedown', handleDrop);
+    wrapper.addEventListener('touchstart', handleDrop, { passive: true });
+    document.getElementById('restart-btn').addEventListener('click', resetGame);
+
+    nextBallLevel = getRandomSpawnLevel();
+    prepareNextBall();
+
+</script>
+</body>
+</html>
